@@ -1,195 +1,309 @@
 """
 Voxflow - Intelligent Voice Dictation & Processing
+===================================================
 
-Author: Gaëtan (DoodzProg) - assisted by Claude & Gemini
-Repository: https://github.com/DoodzProg/voxflow
-License: MIT
+Author      : Gaëtan (DoodzProg) — assisted by Claude & Gemini
+Repository  : https://github.com/DoodzProg/voxflow
+License     : MIT
 
-Description:
-    A localized, hotkey-driven voice typing assistant. It captures audio 
-    via microphone, processes it through Groq's Whisper API for speech-to-text, 
-    and refines the output using Llama-3 before simulating keyboard input 
-    to type the polished text directly into the active window.
-    
-    This version uses the `keyboard` library for low-level Windows scan-code 
-    hooks to reliably support AltGr on international/AZERTY layouts.
+Description
+-----------
+A hotkey-driven AI dictation assistant for Windows.
+Captures microphone audio, transcribes it via Groq Whisper, refines the
+output with Llama-3, and injects the polished text at the cursor position.
+
+Phase 1 — System Tray Integration
+----------------------------------
+The application runs as a background process with a system tray icon.
+No terminal window is required during normal use.
+
+Thread architecture
+-------------------
+  Main thread   : pystray icon event loop (required by Windows tray API)
+  Worker thread : pipeline_worker — consumes the audio queue (STT → LLM → type)
+  Audio thread  : sounddevice InputStream callback (managed by sounddevice)
+  Keyboard hook : keyboard library low-level hook (managed internally)
+
+Requirements
+------------
+  pip install groq sounddevice numpy keyboard pyperclip scipy pystray Pillow python-dotenv
 """
 
 import io
 import os
+import sys
 import time
 import threading
 import queue
+from typing import Optional
+
 import numpy as np
 import sounddevice as sd
 import pyperclip
+import keyboard
 from scipy.io import wavfile
-import keyboard  # Low-level Windows keyboard hook (scan-code based)
 from groq import Groq
 from dotenv import load_dotenv
+from PIL import Image, ImageDraw, ImageFont
+import pystray
 
-# Load environment variables from .env file
+# ── Environment ───────────────────────────────────────────────────────────────
+
 load_dotenv()
 
-# ─────────────────────────────────────────────
-# CONFIGURATION
-# ─────────────────────────────────────────────
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+if not GROQ_API_KEY:
+    # Fail fast with a clear message before the tray icon ever appears.
+    sys.exit(
+        "[FATAL] GROQ_API_KEY is missing or empty.\n"
+        "Create a .env file with: GROQ_API_KEY=gsk_your_key_here"
+    )
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY or GROQ_API_KEY == "en_attente_de_la_cle":
-    raise ValueError("CRITICAL: GROQ_API_KEY is missing or invalid in the .env file.")
+# ── Configuration ─────────────────────────────────────────────────────────────
 
-# Groq Models
-WHISPER_MODEL = "whisper-large-v3"
-LLM_MODEL = "llama-3.3-70b-versatile"
+# Groq model identifiers
+WHISPER_MODEL: str = "whisper-large-v3"
+LLM_MODEL: str = "llama-3.3-70b-versatile"
 
-# Audio Settings
-SAMPLE_RATE = 16000   # Hz — optimal for Whisper
-CHANNELS = 1          # Mono
+# Audio capture settings
+SAMPLE_RATE: int = 16_000   # Hz — optimal for Whisper
+CHANNELS: int = 1            # Mono
 
-# System prompt for Llama-3
-SYSTEM_PROMPT = """Tu es un assistant de dictée vocale intelligent.
-Tu reçois une transcription brute de la voix de l'utilisateur.
-Ton rôle est de :
-1. Supprimer les hésitations ("euh", "hm", répétitions involontaires)
-2. Corriger la ponctuation et la capitalisation
-3. Formater intelligemment : créer des listes si l'utilisateur énumère, 
-   créer des paragraphes si c'est un long texte
-4. Si l'utilisateur donne une instruction (ex: "réponds à ce mail en disant X"),
-   et qu'un contexte de texte sélectionné est fourni, EXÉCUTE l'instruction
-   et retourne uniquement le texte final à insérer
-5. Retourner UNIQUEMENT le texte final, sans commentaire ni explication.
+# Hotkey combination (AltGr + semicolon, AZERTY-safe via scan-code hooks)
+HOTKEY: str = "altgr+;"
 
-Si un contexte (texte sélectionné) est fourni, utilise-le pour mieux comprendre
-la demande de l'utilisateur."""
+# System prompt governing LLM post-processing behaviour
+SYSTEM_PROMPT: str = """You are an intelligent voice dictation assistant.
+You receive a raw voice transcription from the user.
+Your role is to:
+1. Remove filler words and involuntary repetitions ("euh", "hm", etc.)
+2. Fix punctuation and capitalisation
+3. Format intelligently: create bullet lists when the user enumerates,
+   create paragraphs for longer dictations
+4. If the user gives an instruction (e.g. "reply to this email saying X")
+   and a selected-text context is provided, EXECUTE the instruction and
+   return only the final text to be inserted
+5. Return ONLY the final text — no commentary, no explanation.
 
-# ─────────────────────────────────────────────
-# GLOBAL STATE
-# ─────────────────────────────────────────────
+If a context (text selected before dictation) is provided, use it to better
+understand the user's intent."""
+
+# ── Shared Application State ──────────────────────────────────────────────────
 
 class AppState:
-    """Shared application state, protected by a threading lock."""
+    """
+    Thread-safe container for all mutable application state.
+
+    Uses ``threading.RLock`` so that the audio callback and keyboard hooks
+    (which run in separate threads) can safely read and mutate shared data
+    without deadlocking when re-entrant acquisition occurs.
+
+    Attributes
+    ----------
+    is_recording : bool
+        True while the microphone is actively capturing frames.
+    audio_frames : list[numpy.ndarray]
+        Raw PCM chunks accumulated during a recording session.
+    lock : threading.RLock
+        Reentrant lock guarding ``is_recording`` and ``audio_frames``.
+    pipeline_queue : queue.Queue
+        Delivers ``(audio_bytes, context)`` tuples to the pipeline worker.
+    """
+
     def __init__(self) -> None:
         self.is_recording: bool = False
         self.audio_frames: list = []
-        self.lock = threading.RLock()
+        self.lock: threading.RLock = threading.RLock()
         self.pipeline_queue: queue.Queue = queue.Queue()
+
 
 state = AppState()
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# ─────────────────────────────────────────────
-# AUDIO CAPTURE
-# ─────────────────────────────────────────────
+# ── Audio Capture ─────────────────────────────────────────────────────────────
 
-def audio_callback(indata, frames, time_info, status):
-    """Called by sounddevice for each audio chunk."""
+def audio_callback(
+    indata: np.ndarray,
+    frames: int,          # noqa: ARG001 — required by sounddevice signature
+    time_info: object,    # noqa: ARG001
+    status: sd.CallbackFlags,
+) -> None:
+    """
+    sounddevice stream callback — called on every audio block.
+
+    Appends a copy of the incoming PCM block to ``state.audio_frames`` while
+    a recording session is active.  Runs in the sounddevice audio thread.
+
+    Parameters
+    ----------
+    indata:
+        Numpy array of shape ``(frames, channels)`` containing raw PCM data.
+    status:
+        Flags indicating driver-level overflow or underflow conditions.
+    """
     if status:
-        print(f"[Audio] Warning: {status}")
+        print(f"[Audio] Stream warning: {status}")
     with state.lock:
         if state.is_recording:
             state.audio_frames.append(indata.copy())
 
-def get_audio_as_wav_bytes():
-    """Assembles audio frames into WAV bytes in memory."""
+
+def get_audio_as_wav_bytes() -> Optional[io.BytesIO]:
+    """
+    Assemble captured audio frames into an in-memory WAV buffer.
+
+    All audio remains in RAM — no temporary files are written to disk.
+
+    Returns
+    -------
+    io.BytesIO | None
+        A seeked WAV buffer ready for the Groq API, or ``None`` if no
+        frames were captured during the recording session.
+    """
     with state.lock:
         if not state.audio_frames:
             return None
         audio_data = np.concatenate(state.audio_frames, axis=0)
 
-    audio_int16 = (audio_data * 32767).astype(np.int16)
+    audio_int16 = (audio_data * 32_767).astype(np.int16)
     buffer = io.BytesIO()
     wavfile.write(buffer, SAMPLE_RATE, audio_int16)
     buffer.seek(0)
     return buffer
 
-# ─────────────────────────────────────────────
-# GROQ PIPELINE (STT → LLM)
-# ─────────────────────────────────────────────
+# ── Groq Pipeline ─────────────────────────────────────────────────────────────
 
-def run_pipeline(audio_bytes, selected_context):
-    """Executes the STT and LLM processing via Groq API."""
-    print("[Pipeline] Sending to Whisper...")
+def run_pipeline(audio_bytes: io.BytesIO, selected_context: Optional[str]) -> None:
+    """
+    Execute the full STT → LLM → type pipeline for one dictation session.
 
-    # Step 1: STT with Whisper
+    Steps
+    -----
+    1. Send WAV audio to Groq Whisper for speech-to-text.
+    2. Pass the raw transcript (and optional context) to Llama-3 for
+       cleaning, formatting, or command execution.
+    3. Inject the final text at the cursor via the clipboard.
+
+    Parameters
+    ----------
+    audio_bytes:
+        In-memory WAV buffer produced by ``get_audio_as_wav_bytes()``.
+    selected_context:
+        Text that was selected in the active window before dictation began,
+        or ``None`` if nothing was selected.
+    """
+    print("[Pipeline] Sending audio to Whisper...")
+
+    # Step 1: Speech-to-Text
     try:
-        transcription_response = groq_client.audio.transcriptions.create(
+        transcription = groq_client.audio.transcriptions.create(
             model=WHISPER_MODEL,
             file=("audio.wav", audio_bytes, "audio/wav"),
             language="fr",
-            response_format="text"
+            response_format="text",
         )
-        raw_text = transcription_response.strip()
-        print(f"[Whisper] Raw: {raw_text}")
-    except Exception as e:
-        print(f"[Error Whisper] {e}")
+        raw_text: str = transcription.strip()
+        print(f"[Whisper] Raw transcript: {raw_text}")
+    except Exception as exc:
+        print(f"[Whisper] API error: {exc}")
         return
 
     if not raw_text:
-        print("[Pipeline] Empty transcription, aborting.")
+        print("[Pipeline] Empty transcription — aborting.")
         return
 
-    # Step 2: Clean / Format with Llama-3
+    # Step 2: LLM post-processing
     user_message = f"Transcription brute : {raw_text}"
     if selected_context:
-        user_message += f"\n\nContexte (texte sélectionné avant la dictée) :\n{selected_context}"
+        user_message += (
+            f"\n\nContexte (texte sélectionné avant la dictée) :\n{selected_context}"
+        )
 
-    print("[Pipeline] Sending to Llama-3...")
+    print("[Pipeline] Sending transcript to Llama-3...")
     try:
-        chat_response = groq_client.chat.completions.create(
+        response = groq_client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": user_message},
             ],
             temperature=0.3,
-            max_tokens=1024
+            max_tokens=1024,
         )
-        final_text = chat_response.choices[0].message.content.strip()
-        print(f"[Llama-3] Final: {final_text}")
-    except Exception as e:
-        print(f"[Error Llama-3] {e}")
+        final_text: str = response.choices[0].message.content.strip()
+        print(f"[Llama-3] Processed text: {final_text}")
+    except Exception as exc:
+        print(f"[Llama-3] API error: {exc}")
+        # Graceful degradation: fall back to unprocessed transcript.
         final_text = raw_text
 
-    # Step 3: Type the text
+    # Step 3: Inject text at cursor
     type_text(final_text)
 
-def pipeline_worker():
-    """Background thread consuming the pipeline queue."""
+
+def pipeline_worker() -> None:
+    """
+    Long-running background thread that drains the pipeline queue.
+
+    Blocks on ``state.pipeline_queue.get()`` until a task arrives, then
+    calls ``run_pipeline()``.  A ``None`` sentinel signals a clean shutdown.
+    """
     while True:
         task = state.pipeline_queue.get()
         if task is None:
+            print("[Worker] Shutdown signal received — exiting.")
             break
         audio_bytes, context = task
         run_pipeline(audio_bytes, context)
         state.pipeline_queue.task_done()
 
-# ─────────────────────────────────────────────
-# KEYBOARD HOOKS & TYPING LOGIC
-# ─────────────────────────────────────────────
+# ── Keyboard Hooks & Text Injection ──────────────────────────────────────────
 
-def get_selected_text() -> str | None:
-    """Attempt to retrieve the currently selected text via the clipboard."""
+def get_selected_text() -> Optional[str]:
+    """
+    Attempt to capture the currently selected text via the system clipboard.
+
+    Sends ``Ctrl+C``, waits for the OS to update the clipboard, then reads
+    the result.  The clipboard is restored to its previous content afterward.
+
+    Returns
+    -------
+    str | None
+        The selected text if it differs from the pre-capture clipboard
+        content, otherwise ``None``.
+    """
     try:
-        previous_clipboard: str = pyperclip.paste()
+        previous: str = pyperclip.paste()
         keyboard.send("ctrl+c")
         time.sleep(0.15)
         selected: str = pyperclip.paste()
-        pyperclip.copy(previous_clipboard)
+        pyperclip.copy(previous)
 
-        if selected and selected != previous_clipboard:
-            print(f"[Context] Selected text detected: {selected[:60]}...")
+        if selected and selected != previous:
+            print(f"[Context] Selected text: {selected[:60]}...")
             return selected
     except Exception as exc:
         print(f"[Context] Could not read selection: {exc}")
     return None
 
+
 def type_text(text: str) -> None:
-    """Insert text at the current cursor position via the clipboard."""
-    print("[Type] Inserting text...")
-    previous_clipboard: str = ""
+    """
+    Inject *text* at the current cursor position using the clipboard.
+
+    Clipboard-based injection (copy → Ctrl+V) is more reliable than
+    simulating individual keystrokes, especially for accented characters
+    and multi-line content.
+
+    Parameters
+    ----------
+    text:
+        The fully processed string to insert into the active window.
+    """
+    print("[Type] Injecting text via clipboard...")
+    previous: str = ""
     try:
-        previous_clipboard = pyperclip.paste()
+        previous = pyperclip.paste()
     except Exception:
         pass
 
@@ -199,67 +313,179 @@ def type_text(text: str) -> None:
     time.sleep(0.1)
 
     try:
-        pyperclip.copy(previous_clipboard)
+        pyperclip.copy(previous)
     except Exception:
         pass
-    print("[Type] ✅ Text inserted.")
+
+    print("[Type] Text injected successfully.")
+
 
 def _on_hotkey_press() -> None:
-    """Callback invoked when AltGr + ; is pressed."""
+    """
+    Keyboard hook callback — fired when ``AltGr + ;`` is pressed.
+
+    Starts a new recording session if one is not already active.
+    Executes in the keyboard library's internal hook thread.
+    """
     with state.lock:
         if not state.is_recording:
-            print("\n[🎙️] Recording started...")
+            print("[Hotkey] Recording started.")
             state.is_recording = True
             state.audio_frames = []
 
+
 def _on_hotkey_release() -> None:
-    """Callback invoked when AltGr + ; is released."""
+    """
+    Keyboard hook callback — fired when ``AltGr + ;`` is released.
+
+    Stops the active recording session and enqueues the captured audio
+    alongside any clipboard context for asynchronous pipeline processing.
+    Executes in the keyboard library's internal hook thread.
+    """
     with state.lock:
         if not state.is_recording:
             return
-
-        print("[⏹️] Recording stopped. Processing...")
+        print("[Hotkey] Recording stopped.")
         state.is_recording = False
         audio_bytes = get_audio_as_wav_bytes()
 
     if audio_bytes is None:
-        print("[Pipeline] No audio captured — aborting.")
+        print("[Hotkey] No audio captured — aborting.")
         return
 
-    context: str | None = get_selected_text()
+    context: Optional[str] = get_selected_text()
     state.pipeline_queue.put((audio_bytes, context))
 
-# ─────────────────────────────────────────────
-# ENTRY POINT
-# ─────────────────────────────────────────────
+# ── System Tray Icon ──────────────────────────────────────────────────────────
+
+def _build_tray_icon() -> Image.Image:
+    """
+    Generate the system tray icon programmatically using Pillow.
+
+    Produces a 64×64 RGBA image: dark background with a stylised
+    white "V" glyph representing Voxflow.
+
+    Returns
+    -------
+    PIL.Image.Image
+        The rendered tray icon, ready to pass to ``pystray.Icon``.
+    """
+    size = 64
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Background — rounded square with brand colour (#5B4FCF, purple)
+    bg_color = (91, 79, 207, 255)
+    draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=12, fill=bg_color)
+
+    # "V" glyph — two diagonal white lines meeting at the bottom centre
+    white = (255, 255, 255, 255)
+    lw = 5  # stroke width
+    # Left arm of the V
+    draw.line([(10, 12), (32, 52)], fill=white, width=lw)
+    # Right arm of the V
+    draw.line([(54, 12), (32, 52)], fill=white, width=lw)
+
+    return img
+
+
+def _on_quit(icon: pystray.Icon, item: pystray.MenuItem) -> None:  # noqa: ARG001
+    """
+    System tray menu action — clean application shutdown.
+
+    Sends a ``None`` sentinel to the pipeline worker so it can exit its
+    loop gracefully, unhooks all keyboard listeners, and stops the tray icon
+    (which unblocks ``icon.run()`` in the main thread, allowing the process
+    to terminate).
+
+    Parameters
+    ----------
+    icon:
+        The ``pystray.Icon`` instance that owns this menu.
+    item:
+        The ``pystray.MenuItem`` that was activated (unused).
+    """
+    print("[Tray] Quit requested — shutting down...")
+    state.pipeline_queue.put(None)   # Signal pipeline worker to stop
+    keyboard.unhook_all()            # Release all keyboard hooks
+    icon.stop()                      # Unblocks icon.run() → main() returns
+
+# ── Entry Point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """
+    Application entry point.
+
+    Initialisation sequence
+    -----------------------
+    1. Start the pipeline worker thread (daemon, stops with the process).
+    2. Register ``AltGr + ;`` press/release keyboard hooks.
+    3. Open the sounddevice audio input stream.
+    4. Build the system tray icon and call ``icon.run()``.
+
+    ``icon.run()`` blocks the main thread and drives the Windows tray message
+    pump — this is required by the Win32 Shell_NotifyIcon API.  All other
+    work happens in daemon threads or the keyboard hook thread.
+
+    The application exits when the user selects "Quit" from the tray menu,
+    which calls ``icon.stop()`` and unblocks this function.
+    """
     print("=" * 55)
     print("  Voxflow — Open-Source AI Dictation (Groq Edition)")
     print("=" * 55)
     print(f"  Hotkey  : AltGr + ;")
-    print(f"  STT     : {WHISPER_MODEL}  (Groq)")
-    print(f"  LLM     : {LLM_MODEL}  (Groq)")
+    print(f"  STT     : {WHISPER_MODEL}")
+    print(f"  LLM     : {LLM_MODEL}")
     print(f"  Lang    : French (fr)")
     print("=" * 55)
-    print("  Hold AltGr + ; to dictate. Ctrl+C to quit.\n")
+    print("  Starting background services...\n")
 
-    worker_thread = threading.Thread(target=pipeline_worker, daemon=True)
-    worker_thread.start()
+    # 1. Pipeline worker (daemon — auto-killed if main thread exits unexpectedly)
+    worker = threading.Thread(target=pipeline_worker, name="pipeline-worker", daemon=True)
+    worker.start()
 
-    keyboard.add_hotkey("altgr+;", _on_hotkey_press, suppress=True, trigger_on_release=False)
-    keyboard.on_release_key(";", lambda _: _on_hotkey_release() if keyboard.is_pressed("altgr") else None, suppress=False)
+    # 2. Keyboard hooks (scan-code level — AltGr-safe on AZERTY)
+    keyboard.add_hotkey(HOTKEY, _on_hotkey_press, suppress=True, trigger_on_release=False)
+    keyboard.on_release_key(
+        ";",
+        lambda _: _on_hotkey_release() if keyboard.is_pressed("altgr") else None,
+        suppress=False,
+    )
+    print("[System] Keyboard hooks registered.")
 
-    with sd.InputStream(
-        samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
-        callback=audio_callback, blocksize=1024
-    ):
-        print("[System] Audio stream active. Hotkeys registered.")
-        try:
-            keyboard.wait()
-        except KeyboardInterrupt:
-            print("\n[System] Shutdown requested. Goodbye!")
-            state.pipeline_queue.put(None)
+    # 3. Audio stream (runs permanently; callback fires only while recording)
+    audio_stream = sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=CHANNELS,
+        dtype="float32",
+        callback=audio_callback,
+        blocksize=1024,
+    )
+    audio_stream.start()
+    print("[System] Audio stream active.")
+
+    # 4. System tray icon — MUST run on the main thread (Win32 requirement)
+    tray_icon = pystray.Icon(
+        name="Voxflow",
+        icon=_build_tray_icon(),
+        title="Voxflow — Hold AltGr+; to dictate",
+        menu=pystray.Menu(
+            pystray.MenuItem("Voxflow  (AltGr + ; to dictate)", None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quit", _on_quit),
+        ),
+    )
+
+    print("[System] System tray icon starting — terminal can be minimised.\n")
+    tray_icon.run()   # Blocks until _on_quit() calls icon.stop()
+
+    # ── Cleanup (reached after icon.stop()) ───────────────────────────────────
+    print("\n[System] Cleaning up...")
+    audio_stream.stop()
+    audio_stream.close()
+    worker.join(timeout=5)
+    print("[System] Shutdown complete. Goodbye!")
+
 
 if __name__ == "__main__":
     main()
