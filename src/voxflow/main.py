@@ -69,8 +69,13 @@ LLM_MODEL: str = "llama-3.3-70b-versatile"
 SAMPLE_RATE: int = 16_000   # Hz — optimal for Whisper
 CHANNELS: int = 1            # Mono
 
-# Hotkey combination (AltGr + semicolon, AZERTY-safe via scan-code hooks)
-HOTKEY: str = "altgr+;"
+# Hotkey combination — Right Ctrl + Right Shift.
+# Chosen for cross-layout compatibility (identical scan codes on AZERTY,
+# QWERTY, QWERTZ) and one-handed ergonomics (both keys on the right side).
+# Key names are locale-dependent on Windows — French OS returns French names.
+# Confirmed via keyboard.hook() diagnostic on this machine.
+HOTKEY_PRESS: str = "ctrl droite+right shift"
+HOTKEY_RELEASE_KEY: str = "right shift"
 
 # System prompt governing LLM post-processing behaviour
 SYSTEM_PROMPT: str = """You are an intelligent voice dictation assistant.
@@ -322,7 +327,7 @@ def type_text(text: str) -> None:
 
 def _on_hotkey_press() -> None:
     """
-    Keyboard hook callback — fired when ``AltGr + ;`` is pressed.
+    Keyboard hook callback — fired when ``Right Ctrl + Right Shift`` is pressed.
 
     Starts a new recording session if one is not already active.
     Executes in the keyboard library's internal hook thread.
@@ -336,7 +341,7 @@ def _on_hotkey_press() -> None:
 
 def _on_hotkey_release() -> None:
     """
-    Keyboard hook callback — fired when ``AltGr + ;`` is released.
+    Keyboard hook callback — fired when ``Right Ctrl + Right Shift`` is released.
 
     Stops the active recording session and enqueues the captured audio
     alongside any clipboard context for asynchronous pipeline processing.
@@ -419,7 +424,7 @@ def main() -> None:
     Initialisation sequence
     -----------------------
     1. Start the pipeline worker thread (daemon, stops with the process).
-    2. Register ``AltGr + ;`` press/release keyboard hooks.
+    2. Register ``Right Ctrl + Right Shift`` press/release keyboard hooks.
     3. Open the sounddevice audio input stream.
     4. Build the system tray icon and call ``icon.run()``.
 
@@ -433,7 +438,7 @@ def main() -> None:
     print("=" * 55)
     print("  Voxflow — Open-Source AI Dictation (Groq Edition)")
     print("=" * 55)
-    print(f"  Hotkey  : AltGr + ;")
+    print(f"  Hotkey  : Right Ctrl + Right Shift")
     print(f"  STT     : {WHISPER_MODEL}")
     print(f"  LLM     : {LLM_MODEL}")
     print(f"  Lang    : French (fr)")
@@ -444,13 +449,28 @@ def main() -> None:
     worker = threading.Thread(target=pipeline_worker, name="pipeline-worker", daemon=True)
     worker.start()
 
-    # 2. Keyboard hooks (scan-code level — AltGr-safe on AZERTY)
-    keyboard.add_hotkey(HOTKEY, _on_hotkey_press, suppress=True, trigger_on_release=False)
-    keyboard.on_release_key(
-        ";",
-        lambda _: _on_hotkey_release() if keyboard.is_pressed("altgr") else None,
-        suppress=False,
-    )
+    # 2. Keyboard hooks — Right Ctrl (scan 29) + Right Shift (scan 54).
+    # We use raw scan codes instead of key names to bypass locale-dependent
+    # name resolution (French Windows returns 'ctrl droite', English returns
+    # 'right ctrl' — scan codes are always identical regardless of locale).
+    SCAN_CTRL_R  = 29
+    SCAN_SHIFT_R = 54
+
+    def _raw_hook(event: keyboard.KeyboardEvent) -> None:
+        """Low-level hook — tracks Right Ctrl + Right Shift by scan code."""
+        ctrl_held  = keyboard.is_pressed(SCAN_CTRL_R)
+        shift_held = keyboard.is_pressed(SCAN_SHIFT_R)
+
+        if event.event_type == keyboard.KEY_DOWN:
+            # Both keys pressed → start recording
+            if ctrl_held and shift_held:
+                _on_hotkey_press()
+        elif event.event_type == keyboard.KEY_UP:
+            # Either key released while recording → stop
+            if event.scan_code in (SCAN_CTRL_R, SCAN_SHIFT_R):
+                _on_hotkey_release()
+
+    keyboard.hook(_raw_hook)
     print("[System] Keyboard hooks registered.")
 
     # 3. Audio stream (runs permanently; callback fires only while recording)
@@ -468,9 +488,9 @@ def main() -> None:
     tray_icon = pystray.Icon(
         name="Voxflow",
         icon=_build_tray_icon(),
-        title="Voxflow — Hold AltGr+; to dictate",
+        title="Voxflow — Hold Right Ctrl + Right Shift to dictate",
         menu=pystray.Menu(
-            pystray.MenuItem("Voxflow  (AltGr + ; to dictate)", None, enabled=False),
+            pystray.MenuItem("Voxflow  (Right Ctrl + Right Shift)", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", _on_quit),
         ),
