@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011-informational?logo=windows)](https://www.microsoft.com/windows)
 [![API: Groq](https://img.shields.io/badge/API-Groq-orange)](https://console.groq.com/)
-[![Status](https://img.shields.io/badge/Status-MVP%20v1.0-brightgreen)]()
+[![Status](https://img.shields.io/badge/Status-alpha%20v0.2.0-yellow)]()
 
 ---
 
@@ -16,7 +16,7 @@
 Voxflow is a lightweight Windows background process that replaces paid dictation tools (e.g. Typeless) with a fully local, hotkey-driven pipeline:
 
 ```
-Hold AltGr + ;  →  Speak  →  Release  →  Text appears instantly
+Hold Right Ctrl + Right Shift  →  Speak  →  Release  →  Text appears instantly
 ```
 
 Under the hood:
@@ -30,12 +30,12 @@ Under the hood:
 
 ## Features
 
-- 🎤 **Hold-to-record** hotkey (`AltGr + ;`) — works globally on Windows
+- 🎤 **Hold-to-record** hotkey (`Right Ctrl + Right Shift`) — works globally, identical on AZERTY, QWERTY and QWERTZ layouts
 - 🧹 **LLM post-processing** — removes filler words, formats lists, executes instructions
 - 📋 **Context-aware** — optionally reads selected text before dictating to handle commands like "rewrite this"
 - 💨 **In-memory audio** — no temporary files written to disk
 - 🔑 **Secure config** — API key stored in `.env`, never hard-coded
-- 🪶 **Lightweight** — single Python script, no background service or installer
+- 🪶 **Runs silently** — system tray icon, no terminal window required
 
 ---
 
@@ -101,12 +101,17 @@ venv\Scripts\activate
 python src/voxflow/main.py
 ```
 
+Voxflow starts silently in the system tray. The terminal can be minimised or closed.
+
 ### Hotkey reference
 
 | Action | Hotkey |
 |---|---|
-| Start / stop dictation | Hold `AltGr + ;`, release to process |
-| Quit Voxflow | `Ctrl + C` in the terminal |
+| Start / stop dictation | Hold `Right Ctrl + Right Shift`, release to process |
+| Quit Voxflow | Right-click tray icon → **Quit** |
+
+> **Why Right Ctrl + Right Shift?**  
+> This combination uses physical scan codes, making it layout-agnostic — it works identically on AZERTY, QWERTY, and QWERTZ keyboards without any configuration.
 
 ### Context-aware commands
 
@@ -130,6 +135,7 @@ All settings are at the top of `src/voxflow/main.py`:
 | `LLM_MODEL` | `llama-3.3-70b-versatile` | Groq LLM model |
 | `SAMPLE_RATE` | `16000` | Audio sample rate (Hz) — do not change |
 | `CHANNELS` | `1` | Audio channels (mono) |
+| `HOTKEY_PRESS` | `right ctrl+right shift` | Hotkey to start recording |
 
 The `SYSTEM_PROMPT` constant controls LLM behavior. Edit it to customize formatting rules, output language, or add domain-specific instructions.
 
@@ -158,11 +164,14 @@ voxflow/
 
 ## Roadmap
 
-- [ ] System tray icon with status indicator
+- [x] Working Windows MVP with Groq STT + LLM pipeline
+- [x] System tray icon — runs fully headless
+- [x] Cross-layout hotkey (`Right Ctrl + Right Shift`)
 - [ ] Configurable hotkey via `config.toml`
+- [ ] Self-hosted STT backend on Oracle Cloud (Whisper.cpp)
+- [ ] Automatic fallback to Groq when self-hosted server is unreachable
+- [ ] Android custom keyboard (IME) with dictation button
 - [ ] Multiple language support
-- [ ] Android companion app (Termux + Whisper local)
-- [ ] Oracle Cloud self-hosted STT endpoint (Whisper.cpp)
 - [ ] Windows installer (NSIS or WiX)
 
 ---
