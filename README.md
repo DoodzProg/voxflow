@@ -1,191 +1,195 @@
-# Voxflow 🎙️
+# Voxflow
 
-> **Open-source, self-hosted AI dictation for Windows.**  
-> Hold a hotkey, speak — Voxflow transcribes, cleans, and types your text instantly.
-
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2011-informational?logo=windows)](https://www.microsoft.com/windows)
-[![API: Groq](https://img.shields.io/badge/API-Groq-orange)](https://console.groq.com/)
-[![Status](https://img.shields.io/badge/Status-alpha%20v0.2.0-yellow)]()
+**Open-source AI-powered voice dictation for Windows.**
+Hold a hotkey, speak, release — your words appear instantly in any application.
 
 ---
 
 ## Overview
 
-Voxflow is a lightweight Windows background process that replaces paid dictation tools (e.g. Typeless) with a fully local, hotkey-driven pipeline:
+Voxflow is a lightweight, privacy-friendly dictation assistant that runs entirely on your machine (except for the Groq API call). It captures audio from your microphone, transcribes it with **Groq Whisper**, optionally cleans and reformats it with **Groq Llama-3**, then injects the result at your cursor via the clipboard — in under a second.
 
-```
-Hold Right Ctrl + Right Shift  →  Speak  →  Release  →  Text appears instantly
-```
-
-Under the hood:
-1. **Whisper** (via Groq API) converts your voice to raw text at near-zero latency.
-2. **Llama 3.3** (via Groq API) cleans hesitations, fixes punctuation, and executes smart commands (e.g. *"reply to this email saying I'm available tomorrow"*).
-3. The polished text is injected via the clipboard at your cursor — works in any application.
-
-**Why Groq?** Their free tier delivers Whisper + Llama inference in under 1 second — faster than most paid SaaS solutions.
+No subscription, no cloud account beyond a free Groq API key, no data retained on external servers.
 
 ---
 
 ## Features
 
-- 🎤 **Hold-to-record** hotkey (`Right Ctrl + Right Shift`) — works globally, identical on AZERTY, QWERTY and QWERTZ layouts
-- 🧹 **LLM post-processing** — removes filler words, formats lists, executes instructions
-- 📋 **Context-aware** — optionally reads selected text before dictating to handle commands like "rewrite this"
-- 💨 **In-memory audio** — no temporary files written to disk
-- 🔑 **Secure config** — API key stored in `.env`, never hard-coded
-- 🪶 **Runs silently** — system tray icon, no terminal window required
+- **Hotkey-driven dictation** — customisable key combos (hold or toggle mode)
+- **Context-aware instructions** — select text first, then dictate a command; the LLM responds using your selection as context
+- **LLM post-processing** — automatic punctuation, capitalisation and filler-word removal
+- **Physical microphone filter** — only real, connectable devices shown (no virtual cables, no loopback entries)
+- **0.5 s loopback test** — hear your own mic before dictating
+- **Floating voice overlay** — animated VU-meter bubble shown during recording
+- **Confirmation chimes** — soft two-note sound on start/stop (toggle-able)
+- **Dictation history** — last 10 sessions with one-click copy
+- **Live DARK / LIGHT theme** — instant switch, no reconstruction, state preserved
+- **System tray** — runs silently in the background; window minimises to tray
+
+---
+
+## Architecture
+
+```
+src/voxflow/
+├── core/
+│   ├── engine.py        # DictationEngine (QThread) — STT + LLM pipeline
+│   └── hotkey.py        # HotkeyListener (QThread) — 50 ms keyboard poll
+├── ui/
+│   ├── app.py           # VoxflowApp (QMainWindow) + VoiceOverlay + entry point
+│   ├── components.py    # Reusable widgets: NavButton, StatCard, HotkeyButton ...
+│   ├── styles.py        # Theme dataclasses (DARK/LIGHT), ICONS dict, QSS helpers
+│   └── pages/
+│       ├── base.py      # BasePage(QScrollArea) — abstract retheme() contract
+│       ├── home.py      # Dashboard: stats + shortcut cards + history
+│       ├── general.py   # Hotkey binding, behaviour toggles, language
+│       ├── api.py       # Groq API key configuration + live verification
+│       ├── audio.py     # Microphone selection + loopback test (MicTester)
+│       └── about.py     # Version info + project links
+└── utils/
+    └── config.py        # ConfigManager — reads/writes .env file
+```
+
+**Theme-switching design:** each page is a class inheriting `BasePage` with a `retheme(t: Theme)` method. `VoxflowApp.apply_theme()` updates the global theme state, applies a new QPalette + QSS, then calls `retheme()` on every page — no widget is rebuilt, so all user-input state (API key field, selected microphone, toggles) is preserved across switches.
 
 ---
 
 ## Requirements
 
-| Requirement | Details |
-|---|---|
-| OS | Windows 10 / 11 (64-bit) |
-| Python | 3.11 or higher |
-| Privileges | **Administrator** (required by the `keyboard` library for global hooks) |
-| Groq API key | Free tier at [console.groq.com](https://console.groq.com/) |
-| Microphone | Any microphone recognized by Windows |
+| Requirement | Version |
+|-------------|---------|
+| Windows | 10 / 11 |
+| Python | 3.11+ |
+| Groq API key | Free tier (no credit card) |
+| Admin privileges | Required for global keyboard hooks |
 
 ---
 
 ## Installation
 
-### 1 — Clone the repository
-
 ```bash
-git clone https://github.com/DoodzProg/voxflow.git
+# 1. Clone the repository
+git clone https://github.com/your-username/voxflow.git
 cd voxflow
-```
 
-### 2 — Create and activate a virtual environment
-
-```bash
+# 2. Create and activate a virtual environment
 python -m venv venv
 venv\Scripts\activate
-```
 
-### 3 — Install dependencies
-
-```bash
+# 3. Install dependencies
 pip install -r requirements.txt
-```
 
-### 4 — Configure your API key
-
-Copy the example environment file and fill in your key:
-
-```bash
+# 4. Configure your Groq API key
 copy .env.example .env
+# Edit .env and set GROQ_API_KEY=gsk_...
 ```
 
-Edit `.env`:
-
-```env
-GROQ_API_KEY=gsk_your_key_here
-```
-
-Get a free key at [console.groq.com](https://console.groq.com/) — no credit card required.
+> **Tip:** You can also enter the key directly in the **API Groq** settings page inside the app — no manual file editing needed.
 
 ---
 
 ## Usage
 
-> ⚠️ **Administrator privileges are required.**  
-> Right-click your terminal (PowerShell or CMD) → **"Run as administrator"**, then launch Voxflow.
-
 ```bash
-venv\Scripts\activate
-python src/voxflow/main.py
+# Run the application
+python -m voxflow.ui.app
+# or
+python src/voxflow/ui/app.py
 ```
 
-Voxflow starts silently in the system tray. The terminal can be minimised or closed.
+The app starts minimised to the system tray. Double-click the tray icon to open the settings window.
 
-### Hotkey reference
+### Default Hotkeys
 
 | Action | Hotkey |
-|---|---|
-| Start / stop dictation | Hold `Right Ctrl + Right Shift`, release to process |
-| Quit Voxflow | Right-click tray icon → **Quit** |
+|--------|--------|
+| Dictation (hold) | `Right Ctrl` + `Right Shift` |
+| Context dictation (hold) | `Right Alt` + `Right Shift` |
 
-> **Why Right Ctrl + Right Shift?**  
-> This combination uses physical scan codes, making it layout-agnostic — it works identically on AZERTY, QWERTY, and QWERTZ keyboards without any configuration.
+Both hotkeys are fully remappable in the **Parametres** settings page.
 
-### Context-aware commands
+### Dictation workflow
 
-Before pressing the hotkey, **select any text** in your active window. Voxflow will read it as context and pass it to the LLM alongside your dictation.
+1. Place your cursor in any text field (browser, editor, chat app...)
+2. Hold `Right Ctrl + Right Shift` and speak
+3. Release — the transcribed, corrected text is pasted automatically
 
-**Examples:**
+### Context-aware instructions
 
-- Select an email draft → dictate *"shorten this to three sentences"*
-- Select a paragraph → dictate *"translate this to English"*
-- No selection → dictate freely and Voxflow will clean and format your speech
+1. Select some text in the foreground application
+2. Hold `Right Alt + Right Shift` and speak an instruction
+   *(e.g. "Reply that I'm available tomorrow afternoon")*
+3. Release — the LLM rewrites or responds using the selection as context
 
 ---
 
 ## Configuration
 
-All settings are at the top of `src/voxflow/main.py`:
+All settings are persisted in `.env` at the project root.
+They can also be changed live from the settings window.
 
-| Variable | Default | Description |
-|---|---|---|
-| `WHISPER_MODEL` | `whisper-large-v3` | Groq STT model |
-| `LLM_MODEL` | `llama-3.3-70b-versatile` | Groq LLM model |
-| `SAMPLE_RATE` | `16000` | Audio sample rate (Hz) — do not change |
-| `CHANNELS` | `1` | Audio channels (mono) |
-| `HOTKEY_PRESS` | `right ctrl+right shift` | Hotkey to start recording |
-
-The `SYSTEM_PROMPT` constant controls LLM behavior. Edit it to customize formatting rules, output language, or add domain-specific instructions.
-
----
-
-## Project Structure
-
-```
-voxflow/
-├── src/
-│   └── voxflow/
-│       ├── __init__.py
-│       └── main.py         ← Core application
-├── assets/
-│   └── demo.gif            ← (planned)
-├── .env.example            ← Environment variable template
-├── .editorconfig           ← Editor consistency settings
-├── CHANGELOG.md            ← Version history
-├── CONTRIBUTING.md         ← Contribution guidelines
-├── LICENSE                 ← MIT License
-├── README.md
-└── requirements.txt
-```
-
----
-
-## Roadmap
-
-- [x] Working Windows MVP with Groq STT + LLM pipeline
-- [x] System tray icon — runs fully headless
-- [x] Cross-layout hotkey (`Right Ctrl + Right Shift`)
-- [ ] Configurable hotkey via `config.toml`
-- [ ] Self-hosted STT backend on Oracle Cloud (Whisper.cpp)
-- [ ] Automatic fallback to Groq when self-hosted server is unreachable
-- [ ] Android custom keyboard (IME) with dictation button
-- [ ] Multiple language support
-- [ ] Windows installer (NSIS or WiX)
+| Key | Default | Description |
+|-----|---------|-------------|
+| `GROQ_API_KEY` | — | Your Groq API key |
+| `WHISPER_MODEL` | `whisper-large-v3-turbo` | Groq STT model |
+| `LLM_MODEL` | `llama-3.3-70b-versatile` | Groq LLM model for correction |
+| `MICROPHONE` | system default | Selected microphone display name |
+| `HOTKEY_DICTATE` | `right ctrl+right shift` | Dictation hotkey |
+| `HOTKEY_CONTEXT` | `right alt+right shift` | Context dictation hotkey |
+| `HOTKEY_DICTATE_MODE` | `hold` | `hold` or `toggle` |
+| `HOTKEY_CONTEXT_MODE` | `hold` | `hold` or `toggle` |
+| `CONFIRMATION_SOUND` | `true` | Play chime on start/stop |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+
+### Quick start
+
+```bash
+git checkout -b feat/your-feature
+# make your changes
+git commit -m "feat: add your feature"
+git push origin feat/your-feature
+# open a pull request on GitHub
+```
+
+### Branch naming
+
+| Prefix | Purpose |
+|--------|---------|
+| `feat/` | New feature |
+| `fix/` | Bug fix |
+| `docs/` | Documentation only |
+| `refactor/` | Code restructuring |
+| `chore/` | Build / tooling |
+
+### Code standards
+
+- Python 3.11+ with full **type hints**
+- **Google-style docstrings** on every public function and class
+- Line length: 100 characters (`black --line-length 100`)
+- No emojis in Python source — use SVG icons from `styles.ICONS`
+
+---
+
+## Roadmap
+
+- [ ] Configurable Whisper language per dictation session
+- [ ] Self-hosted STT via Whisper.cpp (offline mode)
+- [ ] Windows startup shortcut (`winreg` integration)
+- [ ] Installer (NSIS / Inno Setup)
+- [ ] Multi-monitor overlay positioning
+- [ ] History export (plain text / CSV)
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+[MIT](LICENSE) — free for personal and commercial use.
 
 ---
 
-*Built with ☕ as a free alternative to paid dictation tools.*
+*Built with [PySide6](https://doc.qt.io/qtforpython/), [Groq](https://groq.com/) and [sounddevice](https://python-sounddevice.readthedocs.io/).*
