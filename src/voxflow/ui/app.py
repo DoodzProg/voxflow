@@ -36,8 +36,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QPushButton, QLabel, QStackedWidget,
     QFrame, QSystemTrayIcon, QMenu, QMessageBox,
 )
-from PySide6.QtGui import QColor, QPainter, QIcon, QPixmap
-from PySide6.QtCore import Qt, QTimer, Signal, QByteArray
+from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QPixmap
+from PySide6.QtCore import (
+    Qt, QTimer, Signal, QByteArray,
+    QPropertyAnimation, QEasingCurve, Property,
+)
 from PySide6.QtSvgWidgets import QSvgWidget
 
 from voxflow.utils.config import ConfigManager
@@ -45,12 +48,35 @@ from voxflow.core.engine import DictationEngine
 from voxflow.core.hotkey import HotkeyListener
 
 import voxflow.ui.styles as S
-from voxflow.ui.styles import ICONS, Theme, DARK, LIGHT
+from voxflow.ui.styles import ICONS, Theme, DARK, LIGHT, LOGO_SVG
 from voxflow.ui.components import (
     set_theme, _t, make_svg, reload_svg,
-    PillBadge, NavButton,
+    PillBadge, NavButton, TitleBar,
 )
 from voxflow.ui.pages import HomePage, GeneralPage, ApiPage, AudioPage, AboutPage
+from voxflow.utils.i18n import tr
+from PySide6.QtSvg import QSvgRenderer
+
+def _make_app_icon() -> QIcon:
+    """Render ``LOGO_SVG`` into a :class:`~PySide6.QtGui.QIcon` at all standard
+    Windows icon sizes (16 → 256 px).
+
+    Returns:
+        A multi-resolution :class:`~PySide6.QtGui.QIcon` suitable for the
+        window title bar, taskbar and system-tray contexts.
+    """
+    renderer = QSvgRenderer(QByteArray(LOGO_SVG.encode()))
+    icon = QIcon()
+    from PySide6.QtGui import QImage  # noqa: PLC0415
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        img = QImage(size, size, QImage.Format_ARGB32)
+        img.fill(0)
+        p = QPainter(img)
+        renderer.render(p)
+        p.end()
+        icon.addPixmap(QPixmap.fromImage(img))
+    return icon
+
 
 # Add the "copy" icon that is not in the default ICONS dictionary
 ICONS["copy"] = (
@@ -60,18 +86,66 @@ ICONS["copy"] = (
 
 
 # ─────────────────────────────────────────────────────────────
+#  VOICE OVERLAY — BARS ANIMATION SUBWIDGET
+# ─────────────────────────────────────────────────────────────
+
+class _OverlayBars(QWidget):
+    """Compact animated bar-chart that visualises the microphone RMS level.
+
+    Intended as a child widget of :class:`VoiceOverlay`.  The accent colour
+    is read from the live theme at paint time so it updates automatically.
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.level: float = 0.0
+        self.setFixedSize(48, 30)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: transparent;")
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        """Draw five rounded bars whose heights scale with :attr:`level`."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(_t().accent))
+
+        bar_w, gap, num = 4, 3, 5
+        total_w = num * bar_w + (num - 1) * gap
+        sx = (self.width() - total_w) // 2
+        cy = self.height() // 2
+        base_h, max_h = 4, 20
+
+        for i in range(num):
+            dist = abs(i - num // 2)
+            h = base_h + self.level * max_h * (1.0 - dist * 0.3)
+            x = sx + i * (bar_w + gap)
+            y = cy - h / 2
+            p.drawRoundedRect(int(x), int(y), bar_w, int(h), 2, 2)
+
+        p.end()
+
+
+# ─────────────────────────────────────────────────────────────
 #  VOICE OVERLAY
 # ─────────────────────────────────────────────────────────────
 
 class VoiceOverlay(QWidget):
-    """Frameless floating bubble displayed at the bottom of the screen during dictation.
+    """Themed floating bubble shown at the bottom of the screen during dictation.
 
-    Renders a pulsing bar-chart visualiser driven by the real-time RMS audio
-    level emitted by :class:`~voxflow.core.engine.DictationEngine`.
+    Displays a status label, an animated bar-chart VU-meter and two action
+    buttons: cancel (✕, discards audio) and confirm (✓, processes audio).
+
+    Signals:
+        cancel_requested:  Emitted when the user clicks ✕.
+        confirm_requested: Emitted when the user clicks ✓.
 
     Args:
         parent: Optional parent widget (normally ``None`` for a top-level window).
     """
+
+    cancel_requested = Signal()
+    confirm_requested = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -82,81 +156,142 @@ class VoiceOverlay(QWidget):
             | Qt.WindowDoesNotAcceptFocus,
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(180, 50)
-
-        self._level: float = 0.0
-        self._target_level: float = 0.0
-        self._text: str = "Écoute…"
+        # Compact pill size — slightly smaller than the initial 320×58
+        self.setFixedSize(270, 50)
 
         self._anim_timer = QTimer(self)
-        self._anim_timer.timeout.connect(self._animate)
-        self._anim_timer.setInterval(1000 // 30)  # 30 fps
+        self._anim_timer.timeout.connect(self._tick)
+        self._anim_timer.setInterval(1000 // 30)
+
+        self._build()
+
+    # ------------------------------------------------------------------
+
+    def _build(self) -> None:
+        """Construct the overlay layout: [✕] [label] [bars] ─── [✓]."""
+        t = _t()
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(10, 0, 10, 0)
+        lo.setSpacing(8)
+
+        # ── Cancel button — LEFT of the label (discards audio) ──────
+        self._btn_cancel = QPushButton()
+        self._btn_cancel.setFixedSize(30, 30)
+        self._btn_cancel.setCursor(Qt.PointingHandCursor)
+        self._btn_cancel.setFocusPolicy(Qt.NoFocus)
+        _cl = QHBoxLayout(self._btn_cancel)
+        _cl.setContentsMargins(0, 0, 0, 0)
+        self._cancel_svg = make_svg("x_mark", 12, t.text_2)
+        _cl.addWidget(self._cancel_svg, 0, Qt.AlignCenter)
+        self._btn_cancel.clicked.connect(self.cancel_requested)
+        lo.addWidget(self._btn_cancel, 0, Qt.AlignVCenter)
+
+        # ── Status label ─────────────────────────────────────────────
+        self._lbl = QLabel("Dictée…")
+        lo.addWidget(self._lbl)
+
+        # ── Animated bars ────────────────────────────────────────────
+        self._bars = _OverlayBars(self)
+        lo.addWidget(self._bars)
+        lo.addStretch()
+
+        # ── Confirm button — RIGHT (sends audio for processing) ──────
+        self._btn_confirm = QPushButton()
+        self._btn_confirm.setFixedSize(30, 30)
+        self._btn_confirm.setCursor(Qt.PointingHandCursor)
+        self._btn_confirm.setFocusPolicy(Qt.NoFocus)
+        _cf = QHBoxLayout(self._btn_confirm)
+        _cf.setContentsMargins(0, 0, 0, 0)
+        self._confirm_svg = make_svg("check", 12, t.accent)
+        _cf.addWidget(self._confirm_svg, 0, Qt.AlignCenter)
+        self._btn_confirm.clicked.connect(self.confirm_requested)
+        lo.addWidget(self._btn_confirm, 0, Qt.AlignVCenter)
+
+        self._apply_style(t)
+
+    def _apply_style(self, t: Theme) -> None:
+        """Apply theme-aware colours to all child widgets.
+
+        Args:
+            t: Active :class:`~voxflow.ui.styles.Theme`.
+        """
+        self._lbl.setStyleSheet(
+            f"color: {t.text_1}; background: transparent; "
+            f"font-size: 13px; font-family: 'Segoe UI Variable', 'Segoe UI';"
+        )
+        # Cancel: neutral gray, danger colour on hover
+        dr = t.danger.lstrip("#")
+        self._btn_cancel.setStyleSheet(
+            f"QPushButton {{ background: {t.bg_hover}; border: none; "
+            f"border-radius: 15px; }} "
+            f"QPushButton:hover {{ background: #22{dr}; }}"
+        )
+        reload_svg(self._cancel_svg, "x_mark", t.text_2)
+        # Confirm: subtle accent fill, brighter on hover
+        rgb = t.accent.lstrip("#")
+        self._btn_confirm.setStyleSheet(
+            f"QPushButton {{ background: #22{rgb}; border: none; "
+            f"border-radius: 15px; }} "
+            f"QPushButton:hover {{ background: #44{rgb}; }}"
+        )
+        reload_svg(self._confirm_svg, "check", t.accent)
+
+    def retheme(self, t: Theme) -> None:
+        """Update colours and repaint when the application theme changes.
+
+        Args:
+            t: New active theme.
+        """
+        self._apply_style(t)
+        self.update()
+
+    # ------------------------------------------------------------------
 
     def set_text(self, text: str) -> None:
-        """Update the label shown inside the overlay bubble.
+        """Update the status label.
 
         Args:
-            text: Status string, e.g. ``"Dictée…"`` or ``"Instructions…"``.
+            text: E.g. ``"Dictée…"`` or ``"Instructions…"``.
         """
-        self._text = text
-        self.update()
+        self._lbl.setText(text)
 
     def set_level(self, rms: float) -> None:
-        """Feed a new RMS audio level into the visualiser.
+        """Forward a new RMS level to the bar visualiser.
 
         Args:
-            rms: Root-mean-square amplitude in the range ``[0.0, 1.0]``.
+            rms: Normalised amplitude ``[0.0, 1.0]``.
         """
-        import math
+        import math  # noqa: PLC0415
         if math.isnan(rms) or math.isinf(rms):
             rms = 0.0
-        self._target_level = min(rms * 15.0, 1.0)
+        self._bars._target = min(rms * 15.0, 1.0)
 
-    def _animate(self) -> None:
-        """Smooth the level towards the target using a low-pass filter."""
-        self._level = self._level * 0.6 + self._target_level * 0.4
-        self.update()
+    def _tick(self) -> None:
+        """Smooth the bar level with a low-pass filter and repaint."""
+        target = getattr(self._bars, "_target", 0.0)
+        self._bars.level = self._bars.level * 0.6 + target * 0.4
+        self._bars.update()
 
     def showEvent(self, event) -> None:  # type: ignore[override]
-        """Start the animation timer when the overlay becomes visible."""
+        """Start the animation timer."""
         self._anim_timer.start()
         super().showEvent(event)
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
-        """Stop the timer and reset levels when the overlay is hidden."""
+        """Stop the timer and reset visualiser state."""
         self._anim_timer.stop()
-        self._level = 0.0
-        self._target_level = 0.0
+        self._bars.level = 0.0
         super().hideEvent(event)
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
-        """Render the bubble background, label and animated bar chart."""
+        """Draw the themed rounded-rect background behind the child widgets."""
+        t = _t()
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-
-        # Background pill
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(24, 24, 27, 240))
-        p.drawRoundedRect(self.rect(), 25, 25)
-
-        # Status text
-        p.setPen(QColor(200, 200, 200))
-        p.setFont(self.font())
-        p.drawText(20, 0, 120, 50, Qt.AlignVCenter | Qt.AlignLeft, self._text)
-
-        # Animated bars
-        bar_w, spacing, num_bars = 4, 4, 5
-        start_x, center_y = 110, 25
-        base_h, max_h = 4, 24
-        p.setBrush(QColor(167, 139, 250))
-        for i in range(num_bars):
-            dist = abs(i - num_bars // 2)
-            modifier = 1.0 - dist * 0.3
-            h = base_h + self._level * max_h * modifier
-            x = start_x + i * (bar_w + spacing)
-            y = center_y - h / 2
-            p.drawRoundedRect(int(x), int(y), bar_w, int(h), 2, 2)
-
+        pen = QPen(QColor(t.border), 1)
+        p.setPen(pen)
+        p.setBrush(QColor(t.bg_card))
+        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 29, 29)
         p.end()
 
 
@@ -175,11 +310,21 @@ class VoxflowApp(QMainWindow):
         parent: Optional parent widget.
     """
 
+    # Resize border thickness (pixels) used in nativeEvent hit-testing
+    _BORDER: int = 6
+    # Corner-radius of the rounded window background
+    _RADIUS: int = 12
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Voxflow")
+        self.setWindowIcon(_make_app_icon())
         self.resize(860, 580)
         self.setMinimumSize(720, 480)
+
+        # ── Frameless + translucent so we can draw rounded corners ──
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
         self._is_dark: bool = True
         self._is_dictating: bool = False
@@ -194,6 +339,7 @@ class VoxflowApp(QMainWindow):
         self._wire_backend()
 
         self.apply_theme(dark=True)
+        self._position_theme_btn()
         self.load_history()
         self.refresh_home_shortcuts()
         self.home_page.btn_clear.clicked.connect(self.clear_history)
@@ -205,15 +351,8 @@ class VoxflowApp(QMainWindow):
     def _build_tray(self) -> None:
         """Create and show the system tray icon with its context menu."""
         self.tray_icon = QSystemTrayIcon(self)
-        pixmap = QPixmap(64, 64)
-        pixmap.fill(QColor("transparent"))
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QColor(DARK.accent))
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(0, 0, 64, 64, 16, 16)
-        painter.end()
-        self.tray_icon.setIcon(QIcon(pixmap))
+        # Reuse the same multi-resolution icon as the main window.
+        self.tray_icon.setIcon(_make_app_icon())
 
         tray_menu = QMenu()
         show_action = tray_menu.addAction("Ouvrir les paramètres")
@@ -225,13 +364,27 @@ class VoxflowApp(QMainWindow):
         self.tray_icon.show()
 
     def _build_layout(self) -> None:
-        """Assemble the sidebar + stacked-page root layout."""
+        """Assemble the titlebar + sidebar + stacked-page root layout."""
         t = _t()
-        root_w = QWidget()
-        self.setCentralWidget(root_w)
-        hl = QHBoxLayout(root_w)
+
+        # ── Rounded container acts as the visible window background ──
+        self._root_w = _RoundedContainer(self)
+        self.setCentralWidget(self._root_w)
+        outer = QVBoxLayout(self._root_w)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Custom title bar (drag + window controls)
+        self._titlebar = TitleBar(self)
+        outer.addWidget(self._titlebar)
+
+        # Content row (sidebar + pages)
+        content_w = QWidget()
+        content_w.setStyleSheet("background: transparent;")
+        hl = QHBoxLayout(content_w)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(0)
+        outer.addWidget(content_w, 1)
 
         # ── Sidebar ──────────────────────────────────────────────────
         self._sidebar = QFrame()
@@ -252,20 +405,23 @@ class VoxflowApp(QMainWindow):
             f"font-family: 'Segoe UI'; background: transparent;"
         )
         logo_r.addWidget(self._logo_lbl)
-        self._alpha_badge = PillBadge("alpha", t.accent_purple)
+        self._alpha_badge = PillBadge("v1.0.0", t.accent_purple)
         logo_r.addWidget(self._alpha_badge)
         logo_r.addStretch()
         sb.addLayout(logo_r)
         sb.addSpacing(20)
 
-        # Nav buttons
+        # Nav buttons — labels are translated at build time and updated by
+        # retranslate_all() when the user changes the interface language.
         nav_defs: list[tuple[str, str]] = [
-            ("home",     "Accueil"),
-            ("settings", "Paramètres"),
-            ("key",      "API Groq"),
-            ("volume",   "Audio"),
-            ("info",     "À propos"),
+            ("home",     tr("nav.home")),
+            ("settings", tr("nav.settings")),
+            ("key",      tr("nav.api")),
+            ("volume",   tr("nav.audio")),
+            ("info",     tr("nav.about")),
         ]
+        # Store the i18n keys alongside the buttons for retranslation.
+        self._nav_keys = ["nav.home", "nav.settings", "nav.api", "nav.audio", "nav.about"]
         self._nav_btns: list[NavButton] = []
         for ik, lbl in nav_defs:
             btn = NavButton(ik, lbl)
@@ -274,15 +430,8 @@ class VoxflowApp(QMainWindow):
             self._nav_btns.append(btn)
         sb.addStretch()
 
-        # Theme toggle
-        self._theme_btn = QPushButton()
-        self._theme_btn.setFixedHeight(36)
-        self._theme_btn.setCursor(Qt.PointingHandCursor)
-        self._theme_btn.clicked.connect(self._toggle_theme)
-        sb.addWidget(self._theme_btn)
-
         # Quit button
-        self._quit_btn = QPushButton("  Fermer Voxflow")
+        self._quit_btn = QPushButton(tr("sidebar.quit"))
         self._quit_btn.setFixedHeight(36)
         self._quit_btn.setCursor(Qt.PointingHandCursor)
         self._quit_btn.clicked.connect(self.quit_app)
@@ -299,7 +448,7 @@ class VoxflowApp(QMainWindow):
         self._status_dot.setStyleSheet(
             f"color: {t.accent_light}; font-size: 9px; background: transparent;"
         )
-        self.status_label = QLabel("Initialisation…")
+        self.status_label = QLabel(tr("sidebar.status.init"))
         self.status_label.setStyleSheet(
             f"color: {t.text_2}; font-size: 11px; "
             f"font-family: 'Segoe UI'; background: transparent;"
@@ -330,6 +479,13 @@ class VoxflowApp(QMainWindow):
         hl.addWidget(self.pages, 1)
         self._go(0)
 
+        # Connect language-change signal so the entire UI reacts instantly.
+        self.general_page.language_changed.connect(self.retranslate_all)
+
+        # Floating theme button — overlaid on the pages area, top-right corner.
+        self._theme_float_btn = _ThemeFloatBtn(self.pages)
+        self._theme_float_btn.clicked.connect(self._toggle_theme)
+
     def _wire_backend(self) -> None:
         """Instantiate and connect the dictation engine and hotkey listener."""
         self.engine = DictationEngine(self)
@@ -337,11 +493,13 @@ class VoxflowApp(QMainWindow):
 
         self.voice_overlay = VoiceOverlay()
         self.engine.audio_level_changed.connect(self.voice_overlay.set_level)
+        self.voice_overlay.cancel_requested.connect(self.cancel_dictation)
+        self.voice_overlay.confirm_requested.connect(self._on_hotkey_released)
 
         self.engine.status_changed.connect(self.update_status)
         self.engine.text_ready.connect(self.on_text_ready)
         self.engine.error_occurred.connect(
-            lambda msg: self.update_status(f"Erreur: {msg}")
+            lambda msg: self.update_status(f"{tr('engine.error')}: {msg}")
         )
 
         self.hotkey_listener.hotkey_dictate_pressed.connect(self.start_dictation)
@@ -375,6 +533,12 @@ class VoxflowApp(QMainWindow):
         Args:
             dark: ``True`` for DARK mode, ``False`` for LIGHT mode.
         """
+        # Grab the current appearance BEFORE applying any style changes so the
+        # cross-fade overlay shows the old theme fading out.
+        _fade: Optional[_ThemeFadeOverlay] = None
+        if hasattr(self, "_root_w") and self._root_w.isVisible():
+            _fade = _ThemeFadeOverlay(self._root_w, self._root_w.grab())
+
         set_theme(dark)
         self._is_dark = dark
         t = _t()
@@ -382,6 +546,20 @@ class VoxflowApp(QMainWindow):
         app = QApplication.instance()
         app.setPalette(S.get_palette(dark))
         app.setStyleSheet(S.get_qss(dark))
+
+        # Rounded container background
+        self._root_w.update()
+
+        # Title bar
+        self._titlebar.retheme(t)
+
+        # Floating theme button (sun ↔ moon icon swap)
+        if hasattr(self, "_theme_float_btn"):
+            self._theme_float_btn.retheme(t, is_dark=dark)
+
+        # Voice overlay — synchronise with the active theme
+        if hasattr(self, "voice_overlay"):
+            self.voice_overlay.retheme(t)
 
         # Sidebar frame
         self._sidebar.setStyleSheet(S.sidebar_qss(t))
@@ -397,11 +575,6 @@ class VoxflowApp(QMainWindow):
         # Nav buttons
         for btn in self._nav_btns:
             btn.retheme()
-
-        # Theme toggle button
-        label = "  Mode clair" if dark else "  Mode sombre"
-        self._theme_btn.setText(label)
-        self._theme_btn.setStyleSheet(S.theme_toggle_qss(t))
 
         # Quit button
         self._quit_btn.setStyleSheet(
@@ -433,6 +606,45 @@ class VoxflowApp(QMainWindow):
         self.refresh_dashboard()
         self.refresh_home_shortcuts()
 
+        # Start the cross-fade animation now that all widgets have repainted.
+        if _fade is not None:
+            anim = QPropertyAnimation(_fade, b"opacity", _fade)
+            anim.setDuration(280)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.setStartValue(1.0)
+            anim.setEndValue(0.0)
+            anim.finished.connect(_fade.deleteLater)
+            anim.start()
+
+    # ------------------------------------------------------------------
+    # Language switching
+    # ------------------------------------------------------------------
+
+    def retranslate_all(self, _lang: str = "") -> None:
+        """Update every user-visible string to the current UI language.
+
+        Called automatically when :attr:`~voxflow.ui.pages.general.GeneralPage.language_changed`
+        is emitted.  Also safe to call manually at any time.
+
+        Args:
+            _lang: Ignored — language is read from :class:`~voxflow.utils.config.ConfigManager`
+                   by each :func:`~voxflow.utils.i18n.tr` call.
+        """
+        # Sidebar static text
+        self._quit_btn.setText(tr("sidebar.quit"))
+
+        # Navigation button labels
+        for btn, key in zip(self._nav_btns, self._nav_keys):
+            btn.set_label(tr(key))
+
+        # All pages
+        for page in self._pages:
+            page.retranslate()
+
+        # Dynamic home page content uses tr() inside rebuild helpers.
+        self.refresh_dashboard()
+        self.refresh_home_shortcuts()
+
     # ------------------------------------------------------------------
     # Navigation
     # ------------------------------------------------------------------
@@ -446,6 +658,9 @@ class VoxflowApp(QMainWindow):
         self.pages.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_btns):
             btn.set_active(i == idx)
+        # Keep the floating theme button above the newly shown page widget.
+        if hasattr(self, "_theme_float_btn"):
+            self._theme_float_btn.raise_()
 
     # ------------------------------------------------------------------
     # Dictation lifecycle
@@ -573,8 +788,20 @@ class VoxflowApp(QMainWindow):
 
         QTimer.singleShot(50, _extract)
 
+    def cancel_dictation(self) -> None:
+        """Discard the current recording without transcription.
+
+        Connected to :attr:`~VoiceOverlay.cancel_requested`.
+        """
+        if not self._is_dictating:
+            return
+        self._is_dictating = False
+        self.voice_overlay.hide()
+        self.engine.cancel_recording()
+        self.update_status("Dictée annulée")
+
     def _on_hotkey_released(self) -> None:
-        """Handle hotkey release: stop recording and hide the overlay."""
+        """Handle hotkey release or confirm button: stop recording and process."""
         if self._is_dictating:
             self.play_beep(start=False)
         self._is_dictating = False
@@ -727,11 +954,11 @@ class VoxflowApp(QMainWindow):
         total_min = total_sec / 60.0
         wpm = int(total_words / total_min) if total_min > 0 else 0
 
-        self.home_page.stat_words.set_value(f"{total_words} mots")
+        self.home_page.stat_words.set_value(f"{total_words} {tr('home.stat.words.unit')}")
         self.home_page.stat_time.set_value(
             f"{int(total_sec)} sec" if total_min < 1 else f"{int(total_min)} min"
         )
-        self.home_page.stat_wpm.set_value(f"{wpm} MPM")
+        self.home_page.stat_wpm.set_value(f"{wpm} {tr('home.stat.wpm.unit')}")
         self.home_page.stat_sessions.set_value(str(sessions))
 
         layout = self.home_page.history_layout
@@ -743,7 +970,7 @@ class VoxflowApp(QMainWindow):
         t = _t()
         recent = list(reversed(self.history_data))[:10]
         if not recent:
-            lbl = QLabel("Aucune dictée pour l'instant — lancez-vous !")
+            lbl = QLabel(tr("home.empty"))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet(
                 f"color: {t.text_3}; font-size: 13px; "
@@ -812,12 +1039,12 @@ class VoxflowApp(QMainWindow):
         t = _t()
         hk_dict = ConfigManager.get("HOTKEY_DICTATE", "right ctrl+right shift")
         mod_dict = ConfigManager.get("HOTKEY_DICTATE_MODE", "hold")
-        self._add_shortcut_card("Dictée simple", hk_dict, mod_dict, "mic", t)
+        self._add_shortcut_card(tr("home.shortcut.dictate"), hk_dict, mod_dict, "mic", t)
 
         hk_ctx = ConfigManager.get("HOTKEY_CONTEXT", "right alt+right shift")
         mod_ctx = ConfigManager.get("HOTKEY_CONTEXT_MODE", "hold")
         self._add_shortcut_card(
-            "Instructions avec contexte", hk_ctx, mod_ctx, "zap", t
+            tr("home.shortcut.context"), hk_ctx, mod_ctx, "zap", t
         )
 
     def _add_shortcut_card(
@@ -848,9 +1075,9 @@ class VoxflowApp(QMainWindow):
             f"font-family: 'Segoe UI'; background: transparent;"
         )
         action = (
-            "Maintenez pour parler, relâchez pour transcrire"
+            tr("home.shortcut.hold")
             if mode == "hold"
-            else "Appuyez pour démarrer, ré-appuyez pour transcrire"
+            else tr("home.shortcut.toggle")
         )
         t2 = QLabel(action)
         t2.setStyleSheet(
@@ -897,13 +1124,18 @@ class VoxflowApp(QMainWindow):
     def _show_overlay(self, text: str) -> None:
         """Position and show the voice overlay at the bottom-centre of the screen.
 
+        Respects the ``SHOW_OVERLAY`` config key; when the user has disabled
+        the bubble this method is a no-op.
+
         Args:
             text: Initial label text for the overlay bubble.
         """
+        if ConfigManager.get("SHOW_OVERLAY", "true") != "true":
+            return
         self.voice_overlay.set_text(text)
         screen = QApplication.primaryScreen().geometry()
         x = (screen.width() - self.voice_overlay.width()) // 2
-        y = screen.height() - self.voice_overlay.height() - 80
+        y = screen.height() - self.voice_overlay.height() - 56
         self.voice_overlay.move(x, y)
         self.voice_overlay.show()
 
@@ -936,10 +1168,190 @@ class VoxflowApp(QMainWindow):
             self.engine.wait()
         QApplication.instance().quit()
 
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        """Keep the floating theme button anchored to the top-right corner."""
+        super().resizeEvent(event)
+        if hasattr(self, "_theme_float_btn"):
+            self._position_theme_btn()
+
+    def _position_theme_btn(self) -> None:
+        """Move the floating button to the top-right of the pages widget."""
+        btn = self._theme_float_btn
+        margin = 16
+        btn.move(self.pages.width() - btn.width() - margin, margin)
+        btn.raise_()
+
     def closeEvent(self, event) -> None:  # type: ignore[override]
         """Minimise to the system tray instead of quitting on window close."""
         event.ignore()
         self.hide()
+
+    def nativeEvent(self, eventType: bytes, message: object):  # type: ignore[override]
+        """Intercept WM_NCHITTEST to provide native resize hit zones.
+
+        Returns the appropriate ``HTxxx`` code for each of the 8 resize
+        directions when the cursor is within :attr:`_BORDER` pixels of the
+        window edge, giving the OS full control over cursor shape and resize
+        behaviour (Aero-Snap compatible).
+
+        Args:
+            eventType: Platform-specific event type bytes.
+            message:   Platform-specific message pointer.
+        """
+        if eventType == b"windows_generic_MSG":
+            import ctypes  # noqa: PLC0415
+            import ctypes.wintypes  # noqa: PLC0415
+
+            msg = ctypes.wintypes.MSG.from_address(int(message))
+            if msg.message == 0x0084:  # WM_NCHITTEST
+                from PySide6.QtGui import QCursor  # noqa: PLC0415
+
+                pos = QCursor.pos()
+                rect = self.frameGeometry()
+                x, y = pos.x(), pos.y()
+                left = rect.left()
+                right = rect.right()
+                top = rect.top()
+                bottom = rect.bottom()
+                b = self._BORDER
+
+                on_left = x < left + b
+                on_right = x > right - b
+                on_top = y < top + b
+                on_bottom = y > bottom - b
+
+                if on_top and on_left:
+                    result = 13  # HTTOPLEFT
+                elif on_top and on_right:
+                    result = 14  # HTTOPRIGHT
+                elif on_bottom and on_left:
+                    result = 16  # HTBOTTOMLEFT
+                elif on_bottom and on_right:
+                    result = 17  # HTBOTTOMRIGHT
+                elif on_top:
+                    result = 12  # HTTOP
+                elif on_bottom:
+                    result = 15  # HTBOTTOM
+                elif on_left:
+                    result = 10  # HTLEFT
+                elif on_right:
+                    result = 11  # HTRIGHT
+                else:
+                    return super().nativeEvent(eventType, message)
+
+                return True, result
+
+        return super().nativeEvent(eventType, message)
+
+
+# ─────────────────────────────────────────────────────────────
+#  THEME TRANSITION OVERLAY
+# ─────────────────────────────────────────────────────────────
+
+class _ThemeFadeOverlay(QWidget):
+    """Full-window pixmap overlay used to cross-fade theme transitions.
+
+    The widget is placed on top of the root container, paints the *previous*
+    theme's screenshot at a decreasing opacity, and destroys itself once the
+    animation completes — leaving the newly themed window fully visible.
+    """
+
+    def __init__(self, parent: QWidget, pixmap: QPixmap) -> None:
+        super().__init__(parent)
+        self._pixmap = pixmap
+        self._opacity: float = 1.0
+        self.setGeometry(parent.rect())
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.raise_()
+        self.show()
+
+    # Qt property needed by QPropertyAnimation
+    def _get_opacity(self) -> float:
+        return self._opacity
+
+    def _set_opacity(self, value: float) -> None:
+        self._opacity = value
+        self.update()
+
+    opacity = Property(float, _get_opacity, _set_opacity)
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        """Draw the captured pixmap at the current animated opacity."""
+        p = QPainter(self)
+        p.setOpacity(self._opacity)
+        p.drawPixmap(0, 0, self._pixmap)
+        p.end()
+
+
+# ─────────────────────────────────────────────────────────────
+#  FLOATING THEME TOGGLE BUTTON
+# ─────────────────────────────────────────────────────────────
+
+class _ThemeFloatBtn(QPushButton):
+    """Circular sun/moon button that floats in the top-right of the content area.
+
+    Parented to the :class:`~PySide6.QtWidgets.QStackedWidget` pages container
+    and repositioned on every window resize so it always stays in the corner.
+    """
+
+    _SIZE = 44
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        t = _t()
+        self.setFixedSize(self._SIZE, self._SIZE)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(0, 0, 0, 0)
+        self._svg = make_svg("moon", 18, t.text_2)
+        lo.addWidget(self._svg, 0, Qt.AlignCenter)
+
+        self._apply_style(t)
+        self.raise_()
+
+    def retheme(self, t: Theme, is_dark: bool) -> None:
+        """Swap icon and update colours for the new theme.
+
+        Args:
+            t:       Active theme.
+            is_dark: ``True`` when switching to dark mode.
+        """
+        self._apply_style(t)
+        reload_svg(self._svg, "moon" if is_dark else "sun", t.text_2)
+
+    def _apply_style(self, t: Theme) -> None:
+        self.setStyleSheet(
+            f"QPushButton {{ background: {t.bg_card}; "
+            f"border: 1px solid {t.border}; border-radius: 22px; }} "
+            f"QPushButton:hover {{ background: {t.bg_hover}; "
+            f"border-color: {t.accent}; }}"
+        )
+
+
+# ─────────────────────────────────────────────────────────────
+#  ROUNDED BACKGROUND CONTAINER
+# ─────────────────────────────────────────────────────────────
+
+class _RoundedContainer(QWidget):
+    """Transparent central widget that paints the themed rounded-rect background.
+
+    By drawing the background here rather than on the :class:`QMainWindow`
+    itself we avoid bleed artefacts at the window corners when
+    ``WA_TranslucentBackground`` is set.
+    """
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        """Fill the widget area with the current theme's deep-background colour."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(_t().bg_deep))
+        p.drawRoundedRect(
+            self.rect(), VoxflowApp._RADIUS, VoxflowApp._RADIUS
+        )
+        p.end()
 
 
 # ─────────────────────────────────────────────────────────────

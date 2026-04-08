@@ -49,3 +49,18 @@ class BasePage(QScrollArea):
             t: The new :class:`~voxflow.ui.styles.Theme` instance to apply.
         """
         ...
+
+    @abstractmethod
+    def retranslate(self) -> None:
+        """Update all visible text strings to the current UI language.
+
+        Implementors must call :func:`~voxflow.utils.i18n.tr` for every
+        user-visible string and apply it to the corresponding widget with
+        ``setText()``.  Layout structure and widget references must not be
+        altered — only text content changes.
+
+        This method is called by
+        :meth:`~voxflow.ui.app.VoxflowApp.retranslate_all` whenever the user
+        changes the interface language in the Settings page.
+        """
+        ...

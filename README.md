@@ -25,6 +25,8 @@ No subscription, no cloud account beyond a free Groq API key, no data retained o
 - **Dictation history** — last 10 sessions with one-click copy
 - **Live DARK / LIGHT theme** — instant switch, no reconstruction, state preserved
 - **System tray** — runs silently in the background; window minimises to tray
+- **Bilingual UI** — full English / French interface, switchable live without restart
+- **Multi-language dictation** — Whisper language code configurable per user (EN, FR, ES, DE, IT)
 
 ---
 
@@ -69,7 +71,7 @@ src/voxflow/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/voxflow.git
+git clone https://github.com/DoodzProg/voxflow.git
 cd voxflow
 
 # 2. Create and activate a virtual environment
@@ -139,6 +141,8 @@ They can also be changed live from the settings window.
 | `HOTKEY_DICTATE_MODE` | `hold` | `hold` or `toggle` |
 | `HOTKEY_CONTEXT_MODE` | `hold` | `hold` or `toggle` |
 | `CONFIRMATION_SOUND` | `true` | Play chime on start/stop |
+| `UI_LANGUAGE` | `en` | Interface language (`en` or `fr`) |
+| `DICTATION_LANGUAGE` | `en` | Transcription language — ISO 639-1 code passed to Whisper (`en`, `fr`, `es`, `de`, `it`) |
 
 ---
 
@@ -175,12 +179,44 @@ git push origin feat/your-feature
 
 ---
 
+## Building
+
+### Generate the application icon (once)
+
+```bash
+python create_icon.py
+# Writes assets/icon.ico  (multi-resolution: 16 → 256 px)
+```
+
+### Build the standalone executable
+
+```bash
+pip install pyinstaller
+pyinstaller voxflow.spec
+# Output: dist\Voxflow\Voxflow.exe
+```
+
+### Create a Windows installer with Inno Setup
+
+Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then compile the provided script:
+
+```bash
+iscc installer.iss
+# Output: dist\VoxflowSetup.exe  (~15–20 MB)
+```
+
+The installer:
+- Installs to `%LocalAppData%\Voxflow` (no admin rights required)
+- Creates Start Menu and optional Desktop shortcuts
+- Registers an uninstaller in *Add/Remove Programs*
+- Honours the in-app *Launch at Windows startup* toggle (`HKCU` registry)
+
+---
+
 ## Roadmap
 
 - [ ] Configurable Whisper language per dictation session
 - [ ] Self-hosted STT via Whisper.cpp (offline mode)
-- [ ] Windows startup shortcut (`winreg` integration)
-- [ ] Installer (NSIS / Inno Setup)
 - [ ] Multi-monitor overlay positioning
 - [ ] History export (plain text / CSV)
 

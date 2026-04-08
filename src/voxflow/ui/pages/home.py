@@ -20,10 +20,11 @@ from PySide6.QtCore import Qt
 import voxflow.ui.styles as S
 from voxflow.ui.styles import Theme
 from voxflow.ui.components import (
-    _t, PillBadge, StatCard, section_title, page_title, btn_ghost,
+    _t, StatCard, section_title, page_title, btn_ghost,
     make_svg, card,
 )
 from voxflow.ui.pages.base import BasePage
+from voxflow.utils.i18n import tr
 
 if TYPE_CHECKING:
     pass
@@ -68,34 +69,33 @@ class HomePage(BasePage):
 
         # ── Header ──────────────────────────────────────────────────
         hdr = QHBoxLayout()
-        self._page_title = page_title("Tableau de bord")
+        self._page_title = page_title(tr("home.title"))
         hdr.addWidget(self._page_title)
         hdr.addStretch()
-        self._online_badge = PillBadge("  EN LIGNE", t.accent_light)
-        hdr.addWidget(self._online_badge)
         root.addLayout(hdr)
 
         # ── Stats row ────────────────────────────────────────────────
         stats_row = QHBoxLayout()
         stats_row.setSpacing(12)
-        self.stat_words = StatCard("mic", "0 mots", "Dictés aujourd'hui")
-        self.stat_time = StatCard("clock", "0 min", "Temps de dictée")
-        self.stat_wpm = StatCard("zap", "0 MPM", "Vitesse moyenne")
-        self.stat_sessions = StatCard("check", "0", "Sessions complètes")
+        self.stat_words = StatCard("mic", f"0 {tr('home.stat.words.unit')}", tr("home.stat.words.label"))
+        self.stat_time = StatCard("clock", "0 min", tr("home.stat.time.label"))
+        self.stat_wpm = StatCard("zap", f"0 {tr('home.stat.wpm.unit')}", tr("home.stat.wpm.label"))
+        self.stat_sessions = StatCard("check", "0", tr("home.stat.sessions.label"))
         for sc in (self.stat_words, self.stat_time,
                    self.stat_wpm, self.stat_sessions):
             stats_row.addWidget(sc)
         root.addLayout(stats_row)
 
         # ── Active shortcuts (rebuilt externally) ────────────────────
-        root.addWidget(section_title("Raccourcis actifs"))
+        self._sec_shortcuts = section_title(tr("home.section.shortcuts"))
+        root.addWidget(self._sec_shortcuts)
         self.shortcuts_layout = QVBoxLayout()
         self.shortcuts_layout.setSpacing(12)
         root.addLayout(self.shortcuts_layout)
 
         # ── Recent activity header ───────────────────────────────────
         hdr_ar = QHBoxLayout()
-        self._activity_lbl = QLabel("ACTIVITÉ RÉCENTE")
+        self._activity_lbl = QLabel(tr("home.section.activity"))
         self._activity_lbl.setStyleSheet(S.section_title_style(t))
         self._activity_line = QFrame()
         self._activity_line.setFrameShape(QFrame.HLine)
@@ -103,7 +103,7 @@ class HomePage(BasePage):
         hdr_ar.addWidget(self._activity_lbl)
         hdr_ar.addWidget(self._activity_line, 1)
 
-        self.btn_clear = btn_ghost("Réinitialiser")
+        self.btn_clear = btn_ghost(tr("home.btn.clear"))
         self.btn_clear.setFixedHeight(26)
         self._apply_clear_btn_style(t)
         hdr_ar.addWidget(self.btn_clear)
@@ -135,13 +135,29 @@ class HomePage(BasePage):
         """
         self._inner.setStyleSheet("background: transparent;")
         self._page_title.setStyleSheet(S.page_title_style(t))
-        self._online_badge.setStyleSheet(S.pill_badge_qss(t.accent_light))
         self._activity_lbl.setStyleSheet(S.section_title_style(t))
         self._activity_line.setStyleSheet(S.hline_qss(t))
         self._apply_clear_btn_style(t)
+        # Stat cards have inline colour styles — update them explicitly
+        for sc in (self.stat_words, self.stat_time, self.stat_wpm, self.stat_sessions):
+            sc.retheme(t)
         # Stat cards repaint via QPainter which reads _t() at paint time.
         # History items are fully rebuilt by VoxflowApp.refresh_dashboard()
         # which is called right after retheme() in apply_theme().
+
+    def retranslate(self) -> None:
+        """Update all visible text strings to the current UI language."""
+        self._page_title.setText(tr("home.title"))
+        self._sec_shortcuts._title_lbl.setText(tr("home.section.shortcuts").upper())
+        self._activity_lbl.setText(tr("home.section.activity"))
+        self.btn_clear.setText(tr("home.btn.clear"))
+        # Stat card sub-labels
+        self.stat_words.set_label(tr("home.stat.words.label"))
+        self.stat_time.set_label(tr("home.stat.time.label"))
+        self.stat_wpm.set_label(tr("home.stat.wpm.label"))
+        self.stat_sessions.set_label(tr("home.stat.sessions.label"))
+        # Values that contain a translated unit are updated by refresh_dashboard()
+        # which is called right after retranslate() in retranslate_all().
 
     # ------------------------------------------------------------------
     # Private helpers

@@ -17,9 +17,9 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel,
-    QFrame, QScrollArea, QComboBox,
+    QFrame, QScrollArea, QComboBox, QSizePolicy,
 )
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath
 from PySide6.QtCore import (
     Qt, QPropertyAnimation, QEasingCurve, Property,
     QTimer, Signal, QByteArray, QThread,
@@ -168,6 +168,8 @@ def section_title(text: str) -> QWidget:
     line.setStyleSheet(S.hline_qss(t))
     r.addWidget(lbl)
     r.addWidget(line, 1)
+    # Store label reference for retranslation without a custom class.
+    w._title_lbl = lbl  # type: ignore[attr-defined]
     return w
 
 
@@ -391,6 +393,14 @@ class NavButton(QPushButton):
         self._anim.start()
         self._apply(active)
 
+    def set_label(self, text: str) -> None:
+        """Update the text label of the navigation button.
+
+        Args:
+            text: New label string (e.g. the translated nav item name).
+        """
+        self._lbl.setText(text)
+
     def retheme(self) -> None:
         """Re-apply colours from the current global theme without changing active state."""
         t = _t()
@@ -434,14 +444,33 @@ class SettingRow(QWidget):
         r.setSpacing(12)
         col = QVBoxLayout()
         col.setSpacing(2)
-        l = QLabel(label)
-        l.setStyleSheet(S.setting_label_style(t))
-        d = QLabel(desc)
-        d.setStyleSheet(S.setting_desc_style(t))
-        col.addWidget(l)
-        col.addWidget(d)
+        self._lbl = QLabel(label)
+        self._lbl.setStyleSheet(S.setting_label_style(t))
+        self._desc = QLabel(desc)
+        self._desc.setStyleSheet(S.setting_desc_style(t))
+        col.addWidget(self._lbl)
+        col.addWidget(self._desc)
         r.addLayout(col, 1)
         r.addWidget(control, 0, Qt.AlignRight | Qt.AlignVCenter)
+
+    def set_texts(self, label: str, desc: str) -> None:
+        """Update the label and description text of this row.
+
+        Args:
+            label: New primary label string.
+            desc:  New description string.
+        """
+        self._lbl.setText(label)
+        self._desc.setText(desc)
+
+    def retheme(self, t: "Theme") -> None:  # noqa: F821
+        """Re-apply label styles from the supplied theme.
+
+        Args:
+            t: Active :class:`~voxflow.ui.styles.Theme` instance.
+        """
+        self._lbl.setStyleSheet(S.setting_label_style(t))
+        self._desc.setStyleSheet(S.setting_desc_style(t))
 
 
 class SettingCard(QFrame):
@@ -471,6 +500,35 @@ class SettingCard(QFrame):
             self._vbox.addWidget(hline())
         self._vbox.addWidget(SettingRow(label, desc, control))
         self._n += 1
+
+    def rows(self) -> list["SettingRow"]:
+        """Return the ordered list of :class:`SettingRow` children.
+
+        Returns:
+            All ``SettingRow`` instances currently in the card, in insertion order.
+        """
+        result: list[SettingRow] = []
+        for i in range(self._vbox.count()):
+            item = self._vbox.itemAt(i)
+            w = item.widget() if item else None
+            if isinstance(w, SettingRow):
+                result.append(w)
+        return result
+
+    def retheme(self, t: "Theme") -> None:  # noqa: F821
+        """Re-apply card background and all child row styles.
+
+        Args:
+            t: Active :class:`~voxflow.ui.styles.Theme` instance.
+        """
+        self.setStyleSheet(S.card_qss(t))
+        for i in range(self._vbox.count()):
+            item = self._vbox.itemAt(i)
+            w = item.widget() if item else None
+            if isinstance(w, SettingRow):
+                w.retheme(t)
+            elif isinstance(w, QFrame):          # hairline separator
+                w.setStyleSheet(S.hline_qss(t))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -505,14 +563,14 @@ class StatCard(QFrame):
             f"color: {t.text_1}; font-size: 20px; font-weight: 700; "
             f"font-family: 'Segoe UI'; background: transparent;"
         )
-        sub = QLabel(label)
-        sub.setStyleSheet(
+        self._sub_label = QLabel(label)
+        self._sub_label.setStyleSheet(
             f"color: {t.text_2}; font-size: 11px; "
             f"font-family: 'Segoe UI'; background: transparent;"
         )
         v.addLayout(top)
         v.addWidget(self._val_label)
-        v.addWidget(sub)
+        v.addWidget(self._sub_label)
 
     def set_value(self, text: str) -> None:
         """Update the metric value displayed on the card.
@@ -521,6 +579,30 @@ class StatCard(QFrame):
             text: New value string to display.
         """
         self._val_label.setText(text)
+
+    def set_label(self, text: str) -> None:
+        """Update the descriptive sub-label of the card.
+
+        Args:
+            text: New sub-label string.
+        """
+        self._sub_label.setText(text)
+
+    def retheme(self, t: "Theme") -> None:  # noqa: F821
+        """Re-apply card and label styles from the supplied theme.
+
+        Args:
+            t: Active :class:`~voxflow.ui.styles.Theme` instance.
+        """
+        self.setStyleSheet(S.stat_card_qss(t))
+        self._val_label.setStyleSheet(
+            f"color: {t.text_1}; font-size: 20px; font-weight: 700; "
+            f"font-family: 'Segoe UI'; background: transparent;"
+        )
+        self._sub_label.setStyleSheet(
+            f"color: {t.text_2}; font-size: 11px; "
+            f"font-family: 'Segoe UI'; background: transparent;"
+        )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -581,7 +663,9 @@ class HotkeyButton(QPushButton):
                     item.widget().deleteLater()
         else:
             lo = QHBoxLayout(self)
-            lo.setContentsMargins(16, 0, 16, 0)
+            # Vertical margins give the key chips breathing room so they
+            # never touch the top/bottom border of the button frame.
+            lo.setContentsMargins(14, 8, 14, 8)
             lo.setSpacing(8)
 
     def _render(self) -> None:
@@ -608,7 +692,9 @@ class HotkeyButton(QPushButton):
                 chip = QLabel(k)
                 chip.setAlignment(Qt.AlignCenter)
                 chip.setStyleSheet(S.hotkey_chip_style(t))
-                lo.addWidget(chip)
+                # AlignVCenter prevents the label from expanding to the full
+                # button height, keeping the chip compact inside the frame.
+                lo.addWidget(chip, 0, Qt.AlignVCenter)
                 if k != self._keys[-1]:
                     plus = QLabel("+")
                     plus.setStyleSheet(
@@ -660,3 +746,226 @@ class HotkeyButton(QPushButton):
             if hasattr(self, "recorder") and self.recorder.isRunning():
                 self.recorder.terminate()
             self._render()
+
+
+# ─────────────────────────────────────────────────────────────
+#  STYLED COMBO BOX
+# ─────────────────────────────────────────────────────────────
+
+class StyledComboBox(QComboBox):
+    """QComboBox subclass that paints a custom chevron arrow.
+
+    The native ``::down-arrow`` is hidden via QSS (see ``get_qss``).
+    A smooth chevron is drawn in :meth:`paintEvent` using the current
+    theme colour, giving a consistent look across platforms.
+
+    The popup container is patched on first open to remove the native
+    rectangular OS border, leaving only the rounded QSS styling visible.
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        # Remove the QAbstractItemView's own rectangular frame line.
+        self.view().setFrameShape(QFrame.NoFrame)
+        self.view().setFrameShadow(QFrame.Plain)
+        # Pre-patch the popup container *before* it is first shown so that
+        # WA_TranslucentBackground takes full effect (Qt requires the attribute
+        # to be set before the native window handle is created on first show).
+        container = self.view().parentWidget()
+        if container and container is not self:
+            container.setWindowFlags(
+                Qt.Popup
+                | Qt.FramelessWindowHint
+                | Qt.NoDropShadowWindowHint
+            )
+            container.setAttribute(Qt.WA_TranslucentBackground, True)
+            container.setStyleSheet("background: transparent;")
+
+    def showPopup(self) -> None:
+        """Show the popup and re-apply themed view styles.
+
+        Because the container flags are patched in :meth:`__init__`, no
+        hide/show cycle is needed here.  Only the view's QSS is refreshed on
+        every open so theme changes (dark ↔ light) are reflected immediately.
+        """
+        super().showPopup()
+        view = self.view()
+        if view is None:
+            return
+        t = _t()
+        rgb = t.accent.lstrip("#")
+        view.setStyleSheet(
+            f"QAbstractItemView {{"
+            f"  background: {t.bg_card}; border: 1px solid {t.border};"
+            f"  border-radius: 10px; padding: 4px; outline: none;"
+            f"  color: {t.text_1};"
+            f"}}"
+            f"QAbstractItemView::item {{"
+            f"  padding: 6px 14px; border-radius: 6px; min-height: 28px;"
+            f"}}"
+            f"QAbstractItemView::item:hover {{ background: {t.bg_hover}; }}"
+            f"QAbstractItemView::item:selected {{"
+            f"  background: #33{rgb}; color: {t.text_1};"
+            f"}}"
+        )
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        """Render the combo box then overlay a themed chevron arrow."""
+        super().paintEvent(event)
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        t = _t()
+        pen = QPen(QColor(t.text_3), 1.6)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+
+        # Draw a ∨ chevron centred in the drop-down area (rightmost 32 px)
+        cx = self.width() - 16
+        cy = self.height() // 2
+        path = QPainterPath()
+        path.moveTo(cx - 4, cy - 2)
+        path.lineTo(cx,     cy + 2)
+        path.lineTo(cx + 4, cy - 2)
+        p.drawPath(path)
+        p.end()
+
+
+# ─────────────────────────────────────────────────────────────
+#  CUSTOM TITLE BAR
+# ─────────────────────────────────────────────────────────────
+
+class TitleBar(QWidget):
+    """Frameless custom title bar with Windows-style SVG control buttons.
+
+    Provides an empty draggable area on the left and three control buttons
+    (minimise, maximise/restore, close) aligned to the right.  Drag-to-move
+    is delegated to the Win32 ``WM_NCLBUTTONDOWN / HTCAPTION`` message so
+    that snapping, Aero-Snap and multi-monitor behaviour all work natively.
+
+    Args:
+        parent: The :class:`~PySide6.QtWidgets.QMainWindow` that owns this bar.
+    """
+
+    HEIGHT: int = 32
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._win = parent
+        self._maximised = False
+        self.setFixedHeight(self.HEIGHT)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self._build()
+
+    # ------------------------------------------------------------------
+
+    def _build(self) -> None:
+        """Build the title-bar layout."""
+        t = _t()
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Drag area (stretch)
+        layout.addStretch(1)
+
+        # Window control buttons
+        self._btn_min = self._make_btn("−", self._on_min)
+        self._btn_max = self._make_btn("□", self._on_max)
+        self._btn_cls = self._make_btn("✕", self._on_close, is_close=True)
+
+        layout.addWidget(self._btn_min)
+        layout.addWidget(self._btn_max)
+        layout.addWidget(self._btn_cls)
+
+        self._apply_style(t)
+
+    def _make_btn(self, symbol: str, slot, is_close: bool = False) -> QPushButton:
+        """Create a single title-bar control button.
+
+        Args:
+            symbol:   Unicode glyph displayed on the button.
+            slot:     Click callback.
+            is_close: If ``True``, the button shows a red hover colour.
+
+        Returns:
+            A styled :class:`~PySide6.QtWidgets.QPushButton`.
+        """
+        btn = QPushButton(symbol)
+        btn.setFixedSize(46, self.HEIGHT)
+        btn.setCursor(Qt.ArrowCursor)
+        btn.setFocusPolicy(Qt.NoFocus)
+        btn._is_close = is_close  # type: ignore[attr-defined]
+        btn.clicked.connect(slot)
+        return btn
+
+    # ------------------------------------------------------------------
+
+    def retheme(self, t: "Theme") -> None:  # noqa: F821
+        """Update colours when the application theme changes.
+
+        Args:
+            t: Active :class:`~voxflow.ui.styles.Theme` instance.
+        """
+        self._apply_style(t)
+
+    def _apply_style(self, t: "Theme") -> None:  # noqa: F821
+        """Apply QSS to the bar and its buttons.
+
+        Args:
+            t: Active theme.
+        """
+        self.setStyleSheet(f"background: {t.bg_sidebar};")
+        base = (
+            f"QPushButton {{ background: transparent; color: {t.text_2}; "
+            f"border: none; font-size: 14px; }}"
+        )
+        hover_normal = (
+            f"QPushButton:hover {{ background: {t.bg_hover}; color: {t.text_1}; }}"
+        )
+        hover_close = (
+            "QPushButton:hover { background: #C42B1C; color: white; }"
+        )
+        for btn in (self._btn_min, self._btn_max, self._btn_cls):
+            hover = hover_close if btn._is_close else hover_normal  # type: ignore[attr-defined]
+            btn.setStyleSheet(base + hover)
+
+    def _update_max_icon(self) -> None:
+        """Toggle the maximise button glyph between □ and ❐."""
+        self._btn_max.setText("❐" if self._maximised else "□")
+
+    # ------------------------------------------------------------------
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        """Trigger native Win32 window drag on left-button press in drag area."""
+        if event.button() == Qt.LeftButton:
+            try:
+                import ctypes  # noqa: PLC0415
+                ctypes.windll.user32.ReleaseCapture()
+                ctypes.windll.user32.SendMessageW(
+                    int(self._win.winId()), 0xA1, 2, 0  # WM_NCLBUTTONDOWN, HTCAPTION
+                )
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------
+
+    def _on_min(self) -> None:
+        """Minimise the parent window to the taskbar."""
+        self._win.showMinimized()
+
+    def _on_max(self) -> None:
+        """Toggle between maximised and normal window state."""
+        if self._maximised:
+            self._win.showNormal()
+        else:
+            self._win.showMaximized()
+        self._maximised = not self._maximised
+        self._update_max_icon()
+
+    def _on_close(self) -> None:
+        """Minimise to tray (mirrors :meth:`~voxflow.ui.app.VoxflowApp.closeEvent`)."""
+        self._win.close()

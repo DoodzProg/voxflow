@@ -22,7 +22,7 @@ from typing import Optional
 import sounddevice as sd
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QComboBox,
+    QWidget, QVBoxLayout, QPushButton,
 )
 from PySide6.QtCore import Qt
 
@@ -30,10 +30,11 @@ import voxflow.ui.styles as S
 from voxflow.ui.styles import Theme
 from voxflow.ui.components import (
     _t, section_title, page_title, btn_ghost,
-    make_svg, reload_svg, ToggleSwitch, SettingCard,
+    make_svg, reload_svg, SettingCard, StyledComboBox,
 )
 from voxflow.ui.pages.base import BasePage
 from voxflow.utils.config import ConfigManager
+from voxflow.utils.i18n import tr
 
 
 # ─────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ def get_real_microphones() -> list[str]:
 
     Returns:
         Ordered list of microphone display names. The system-default entry
-        ``"Paramètres audio système par défaut"`` is always placed first
+        ``"System Default"`` is always placed first
         when present.
     """
     valid: dict[str, int] = {}
@@ -77,10 +78,10 @@ def get_real_microphones() -> list[str]:
             # Normalise the Windows default mapper entry
             if any(kw in name.lower() for kw in
                    ("mappeur", "mapper", "pilote de capture")):
-                name = "Paramètres audio système par défaut"
+                name = "System Default"
 
             if _EXCLUDE_PATTERN.search(name) and \
-                    name != "Paramètres audio système par défaut":
+                    name != "System Default":
                 continue
 
             # Live probe: open & immediately close a stream
@@ -108,7 +109,7 @@ def get_real_microphones() -> list[str]:
         print(f"[Audio] Device scan error: {exc}")
 
     result = list(valid.keys())
-    default = "Paramètres audio système par défaut"
+    default = "System Default"
     if default in result:
         result.remove(default)
         result.insert(0, default)
@@ -172,7 +173,7 @@ class MicTester:
         samplerate = 16_000
 
         device_id: Optional[int] = None
-        if mic_name != "Paramètres audio système par défaut":
+        if mic_name != "System Default":
             for i, dev in enumerate(sd.query_devices()):
                 if dev["name"] == mic_name:
                     device_id = i
@@ -226,45 +227,34 @@ class AudioPage(BasePage):
         root.setContentsMargins(36, 36, 36, 36)
         root.setSpacing(24)
 
-        self._page_title_lbl = page_title("Audio")
+        self._page_title_lbl = page_title(tr("audio.title"))
         root.addWidget(self._page_title_lbl)
-        root.addWidget(section_title("Périphérique d'entrée"))
+        self._sec_input = section_title(tr("audio.section.input"))
+        root.addWidget(self._sec_input)
 
         self._mic_card = SettingCard()
 
         # Microphone combo -------------------------------------------
-        self._mic_combo = QComboBox()
+        self._mic_combo = StyledComboBox()
         mics = get_real_microphones()
-        self._mic_combo.addItems(mics if mics else ["Aucun microphone détecté"])
-        saved = ConfigManager.get("MICROPHONE", "Paramètres audio système par défaut")
+        self._mic_combo.addItems(mics if mics else [tr("audio.mic.none")])
+        saved = ConfigManager.get("MICROPHONE", "System Default")
         if saved in mics:
             self._mic_combo.setCurrentText(saved)
         self._mic_combo.currentTextChanged.connect(
             lambda v: ConfigManager.set("MICROPHONE", v)
         )
         self._mic_card.add(
-            "Microphone", "Source audio utilisée pour la dictée", self._mic_combo
+            tr("audio.mic.label"), tr("audio.mic.desc"), self._mic_combo
         )
 
-        # Test button -------------------------------------------------
-        self._test_btn = btn_ghost("Tester le micro")
+        # Test button — loopback playback with 0.5 s artificial delay ------
+        self._test_btn = btn_ghost(tr("audio.test.start"))
         self._test_btn.clicked.connect(self._toggle_test)
         self._mic_card.add(
-            "Test Audio",
-            "Écoutez votre retour vocal avec un léger décalage (0.5 s)",
+            tr("audio.test.label"),
+            tr("audio.test.desc"),
             self._test_btn,
-        )
-
-        # Auxiliary toggles ------------------------------------------
-        self._mic_card.add(
-            "Suppression du bruit",
-            "Filtrer les bruits de fond pour améliorer la précision",
-            ToggleSwitch(True),
-        )
-        self._mic_card.add(
-            "Annulation d'écho",
-            "Évite que Voxflow capte la lecture audio en cours",
-            ToggleSwitch(False),
         )
 
         root.addWidget(self._mic_card)
@@ -283,7 +273,7 @@ class AudioPage(BasePage):
         """
         self._inner.setStyleSheet("background: transparent;")
         self._page_title_lbl.setStyleSheet(S.page_title_style(t))
-        self._mic_card.setStyleSheet(S.card_qss(t))
+        self._mic_card.retheme(t)
         # Test button: restore ghost style (don't reset if active — user sees it)
         if not self._mic_tester.is_running:
             self._test_btn.setStyleSheet(S.btn_ghost_qss(t))
@@ -292,15 +282,27 @@ class AudioPage(BasePage):
     # Slots
     # ------------------------------------------------------------------
 
+    def retranslate(self) -> None:
+        """Update all visible text strings to the current UI language."""
+        self._page_title_lbl.setText(tr("audio.title"))
+        self._sec_input._title_lbl.setText(tr("audio.section.input").upper())
+        mic_rows = self._mic_card.rows()
+        if len(mic_rows) >= 2:
+            mic_rows[0].set_texts(tr("audio.mic.label"),  tr("audio.mic.desc"))
+            mic_rows[1].set_texts(tr("audio.test.label"), tr("audio.test.desc"))
+        # Update test button text only when not actively running
+        if not self._mic_tester.is_running:
+            self._test_btn.setText(tr("audio.test.start"))
+
     def _toggle_test(self) -> None:
         """Start or stop the microphone loopback test."""
         if self._mic_tester.is_running:
             self._mic_tester.stop()
-            self._test_btn.setText("Tester le micro")
+            self._test_btn.setText(tr("audio.test.start"))
             self._test_btn.setStyleSheet(S.btn_ghost_qss(_t()))
         else:
             self._mic_tester.start(self._mic_combo.currentText())
-            self._test_btn.setText("Arrêter le test (retour 0.5 s)")
+            self._test_btn.setText(tr("audio.test.stop"))
             self._test_btn.setStyleSheet(
                 "QPushButton { color: #EF4444; border: 1px solid #EF4444; "
                 "background: rgba(239, 68, 68, 0.10); border-radius: 4px; "

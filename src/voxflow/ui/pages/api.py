@@ -25,6 +25,7 @@ from voxflow.ui.components import (
 )
 from voxflow.ui.pages.base import BasePage
 from voxflow.utils.config import ConfigManager
+from voxflow.utils.i18n import tr
 
 
 class ApiPage(BasePage):
@@ -56,7 +57,7 @@ class ApiPage(BasePage):
         root.setContentsMargins(36, 36, 36, 36)
         root.setSpacing(24)
 
-        self._page_title_lbl = page_title("Clé API Groq")
+        self._page_title_lbl = page_title(tr("api.title"))
         root.addWidget(self._page_title_lbl)
 
         # ── Info banner ──────────────────────────────────────────────
@@ -67,15 +68,14 @@ class ApiPage(BasePage):
         br.setSpacing(12)
         self._banner_icon = make_svg("info", 16, t.accent_light)
         br.addWidget(self._banner_icon)
-        self._banner_lbl = QLabel(
-            "Votre clé est stockée localement dans votre profil."
-        )
+        self._banner_lbl = QLabel(tr("api.banner"))
         self._banner_lbl.setStyleSheet(S.setting_desc_style(t))
         self._banner_lbl.setWordWrap(True)
         br.addWidget(self._banner_lbl, 1)
         root.addWidget(self._banner)
 
-        root.addWidget(section_title("Configuration"))
+        self._sec_config = section_title(tr("api.section"))
+        root.addWidget(self._sec_config)
 
         # ── Form card ────────────────────────────────────────────────
         self._form = card()
@@ -83,7 +83,7 @@ class ApiPage(BasePage):
         fv.setContentsMargins(22, 20, 22, 20)
         fv.setSpacing(14)
 
-        self._api_lbl = QLabel("Clé API Groq")
+        self._api_lbl = QLabel(tr("api.key.label"))
         self._api_lbl.setStyleSheet(S.setting_label_style(t))
         fv.addWidget(self._api_lbl)
 
@@ -114,8 +114,8 @@ class ApiPage(BasePage):
         # Action buttons row
         ar = QHBoxLayout()
         ar.addStretch()
-        self._btn_verify = btn_ghost("Vérifier la clé")
-        self._btn_save = btn_primary("Sauvegarder")
+        self._btn_verify = btn_ghost(tr("api.btn.verify"))
+        self._btn_save = btn_primary(tr("api.btn.save"))
         self._btn_verify.clicked.connect(self._verify_key)
         self._btn_save.clicked.connect(self._save_key)
         ar.addWidget(self._btn_verify)
@@ -165,31 +165,40 @@ class ApiPage(BasePage):
             _t().text_2,
         )
 
+    def retranslate(self) -> None:
+        """Update all visible text strings to the current UI language."""
+        self._page_title_lbl.setText(tr("api.title"))
+        self._sec_config._title_lbl.setText(tr("api.section").upper())
+        self._banner_lbl.setText(tr("api.banner"))
+        self._api_lbl.setText(tr("api.key.label"))
+        self._btn_verify.setText(tr("api.btn.verify"))
+        self._btn_save.setText(tr("api.btn.save"))
+
     def _verify_key(self) -> None:
         """Perform a live API probe and update the verify button with feedback."""
         key = self._api_input.text().strip()
         if not key:
-            self._btn_verify.setText("Clé vide !")
-            QTimer.singleShot(2000, lambda: self._btn_verify.setText("Vérifier la clé"))
+            self._btn_verify.setText(tr("api.verify.empty"))
+            QTimer.singleShot(2000, lambda: self._btn_verify.setText(tr("api.btn.verify")))
             return
 
-        self._btn_verify.setText("Vérification…")
+        self._btn_verify.setText(tr("api.verify.checking"))
         QApplication.processEvents()
 
         try:
             from groq import Groq  # noqa: PLC0415
             Groq(api_key=key).models.list()
-            self._btn_verify.setText("Clé valide !")
+            self._btn_verify.setText(tr("api.verify.valid"))
         except Exception as exc:
-            self._btn_verify.setText("Clé invalide")
+            self._btn_verify.setText(tr("api.verify.invalid"))
             QMessageBox.critical(
                 self,
-                "Erreur de vérification",
-                f"La clé API a été rejetée par Groq.\n\nDétail : {exc}",
+                tr("api.verify.error.title"),
+                tr("api.verify.error.msg").format(exc=exc),
             )
 
         def _reset() -> None:
-            self._btn_verify.setText("Vérifier la clé")
+            self._btn_verify.setText(tr("api.btn.verify"))
             self._btn_verify.setStyleSheet(S.btn_ghost_qss(_t()))
 
         QTimer.singleShot(2500, _reset)
@@ -197,5 +206,5 @@ class ApiPage(BasePage):
     def _save_key(self) -> None:
         """Persist the current input value to ``.env`` via ConfigManager."""
         ConfigManager.set("GROQ_API_KEY", self._api_input.text().strip())
-        self._btn_save.setText("Sauvegardé !")
-        QTimer.singleShot(2000, lambda: self._btn_save.setText("Sauvegarder"))
+        self._btn_save.setText(tr("api.save.done"))
+        QTimer.singleShot(2000, lambda: self._btn_save.setText(tr("api.btn.save")))

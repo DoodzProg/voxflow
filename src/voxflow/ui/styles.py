@@ -7,6 +7,39 @@ from __future__ import annotations
 from dataclasses import dataclass
 from PySide6.QtGui import QColor, QPalette
 
+# Primary font stack: Segoe UI Variable (Windows 11 variable font) with
+# Segoe UI as fallback for Windows 10 and earlier.
+_FONT = "'Segoe UI Variable', 'Segoe UI'"
+
+# ── Application logo (SVG, embedded so it works inside PyInstaller bundles) ──
+# The gradient id uses a unique name ("bgL") to avoid conflicts when multiple
+# instances of the SVG are rendered on the same page.
+LOGO_SVG: str = (
+    '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">'
+    '<defs>'
+    '<linearGradient id="bgL" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0%"   stop-color="#7C6FEB"/>'
+    '<stop offset="100%" stop-color="#5B4FCF"/>'
+    '</linearGradient>'
+    '</defs>'
+    # Rounded-square background
+    '<rect width="200" height="200" rx="44" fill="url(#bgL)"/>'
+    # Bold V — the mic-housing side arms
+    '<path d="M 34 52 L 100 158 L 166 52"'
+    ' stroke="white" stroke-width="22"'
+    ' stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    # Top bar that closes the mic housing
+    '<rect x="23" y="40" width="154" height="20" rx="10" fill="white"/>'
+    # Tapered grille lines (opacity 0.55)
+    '<line x1="61"  y1="82"  x2="139" y2="82"'
+    ' stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>'
+    '<line x1="72"  y1="104" x2="128" y2="104"'
+    ' stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>'
+    '<line x1="84"  y1="126" x2="116" y2="126"'
+    ' stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>'
+    '</svg>'
+)
+
 @dataclass(frozen=True)
 class Theme:
     bg_deep:    str
@@ -91,6 +124,8 @@ ICONS: dict[str, str] = {
     "clock":    '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     "star":     '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 '
                 '12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    "x_mark":   '<line x1="18" y1="6" x2="6" y2="18"/>'
+                '<line x1="6" y1="6" x2="18" y2="18"/>',
     "bug":      '<rect x="8" y="6" width="8" height="14" rx="4"/>'
                 '<line x1="12" y1="6" x2="12" y2="3"/>'
                 '<path d="M20 8l-3 2M4 8l3 2M20 16l-3-2M4 16l3-2"/>',
@@ -118,28 +153,45 @@ def _t(is_dark: bool) -> Theme:
 def get_qss(is_dark: bool) -> str:
     t = _t(is_dark)
     return f"""
+    /* Global font — Segoe UI Variable (Windows 11) with Segoe UI fallback */
+    QWidget, QLabel, QPushButton, QComboBox, QLineEdit {{
+        font-family: 'Segoe UI Variable', 'Segoe UI';
+    }}
+
     QScrollBar:vertical {{ background: transparent; width: 5px; margin: 0; }}
     QScrollBar::handle:vertical {{ background: {t.text_3}; border-radius: 3px; min-height: 24px; }}
     QScrollBar::handle:vertical:hover {{ background: {t.text_2}; }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
     QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
-    QToolTip {{ background: {t.bg_card}; color: {t.text_1}; border-radius: 6px; padding: 4px 8px; font-family: 'Segoe UI'; font-size: 12px; }}
-    QMainWindow, QWidget {{ background: {t.bg_deep}; color: {t.text_1}; font-family: 'Segoe UI'; }}
-    QScrollArea {{ background: transparent; border: none; }}
-    QMenu {{ background: {t.bg_card}; color: {t.text_1}; border-radius: 8px; padding: 4px; font-family: 'Segoe UI'; font-size: 13px; border: 1px solid {t.bg_hover}; }}
-    QMenu::item {{ padding: 6px 20px; border-radius: 4px; }}
-    
-    /* Correction de l'opacité (ARGB) pour les sélections */
-    QMenu::item:selected {{ background: {t.accent_purple.replace('#', '#33')}; }}
 
-    QComboBox {{ background-color: {t.bg_hover}; border: 1px solid {t.border}; border-radius: 6px; padding: 6px 12px; color: {t.text_1}; font-size: 13px; }}
-    QComboBox:hover {{ border: 1px solid {t.accent}; }}
-    QComboBox::drop-down {{ border: none; width: 24px; }}
+    QToolTip {{ background: {t.bg_card}; color: {t.text_1}; border-radius: 6px;
+               padding: 4px 8px; font-size: 12px; border: 1px solid {t.border}; }}
+    QMainWindow, QWidget {{ background: {t.bg_deep}; color: {t.text_1}; }}
+    QScrollArea {{ background: transparent; border: none; }}
+
+    QMenu {{ background: {t.bg_card}; color: {t.text_1}; border-radius: 8px; padding: 4px;
+             font-size: 13px; border: 1px solid {t.border}; }}
+    QMenu::item {{ padding: 6px 20px; border-radius: 4px; }}
+    QMenu::item:selected {{ background: {t.accent}22; color: {t.text_1}; }}
+
+    /* ComboBox — custom chevron is drawn by StyledComboBox.paintEvent */
+    QComboBox {{
+        background-color: {t.bg_hover}; border: 1px solid {t.border};
+        border-radius: 8px; padding: 6px 36px 6px 12px;
+        color: {t.text_1}; font-size: 13px; min-height: 32px;
+    }}
+    QComboBox:hover {{ border: 1px solid {t.accent}; background: {t.bg_card}; }}
+    QComboBox:focus  {{ border: 1px solid {t.accent}; outline: none; }}
+    QComboBox::drop-down {{ border: none; width: 32px; }}
+    QComboBox::down-arrow {{ image: none; }}
     QComboBox QAbstractItemView {{
-        background-color: {t.bg_card}; border: 1px solid {t.border}; border-radius: 6px; color: {t.text_1};
-        selection-background-color: {t.accent_purple.replace('#', '#44')};
+        background-color: {t.bg_card}; border: 1px solid {t.border};
+        border-radius: 8px; color: {t.text_1}; padding: 4px;
+        selection-background-color: {t.accent}33;
         selection-color: {t.text_1}; outline: none;
     }}
+    QAbstractItemView::item {{ padding: 6px 12px; border-radius: 6px; min-height: 28px; }}
+    QAbstractItemView::item:hover {{ background: {t.bg_hover}; }}
     """
 
 def get_palette(is_dark: bool) -> QPalette:
@@ -177,7 +229,10 @@ def nav_button_qss(active: bool, t: Theme) -> str:
 def nav_label_style(active: bool, t: Theme) -> str:
     color  = t.accent if active else t.text_2
     weight = "600" if active else "400"
-    return f"color: {color}; font-size: 14px; font-weight: {weight}; font-family: 'Segoe UI'; background: transparent;"
+    return (
+        f"color: {color}; font-size: 14px; font-weight: {weight}; "
+        f"font-family: {_FONT}; background: transparent;"
+    )
 
 def card_qss(t: Theme) -> str:
     return f"QFrame {{ background: {t.bg_card}; border-radius: 12px; }}"
@@ -186,16 +241,28 @@ def hline_qss(t: Theme) -> str:
     return f"background: {t.text_3.replace('#', '#44')}; border: none; max-height: 1px; margin: 0 20px;"
 
 def page_title_style(t: Theme) -> str:
-    return f"color: {t.text_1}; font-size: 22px; font-weight: 700; font-family: 'Segoe UI'; background: transparent;"
+    return (
+        f"color: {t.text_1}; font-size: 24px; font-weight: 700; "
+        f"font-family: {_FONT}; background: transparent;"
+    )
 
 def section_title_style(t: Theme) -> str:
-    return f"color: {t.text_3}; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; font-family: 'Segoe UI'; background: transparent;"
+    return (
+        f"color: {t.text_3}; font-size: 11px; font-weight: 700; "
+        f"letter-spacing: 1.8px; font-family: {_FONT}; background: transparent;"
+    )
 
 def setting_label_style(t: Theme) -> str:
-    return f"color: {t.text_1}; font-size: 13px; font-weight: 500; font-family: 'Segoe UI'; background: transparent;"
+    return (
+        f"color: {t.text_1}; font-size: 14px; font-weight: 600; "
+        f"font-family: {_FONT}; background: transparent;"
+    )
 
 def setting_desc_style(t: Theme) -> str:
-    return f"color: {t.text_2}; font-size: 11px; font-family: 'Segoe UI'; background: transparent;"
+    return (
+        f"color: {t.text_2}; font-size: 12px; "
+        f"font-family: {_FONT}; background: transparent;"
+    )
 
 def btn_primary_qss(t: Theme) -> str:
     return (
@@ -225,13 +292,32 @@ def eye_btn_qss(t: Theme) -> str:
     return f"QPushButton {{ background: {t.bg_hover}; border-radius: 9px; }} QPushButton:hover {{ background: {t.bg_card}; }}"
 
 def hotkey_idle_qss(t: Theme) -> str:
-    return f"QPushButton {{ background: {t.bg_card}; border-radius: 10px; border: 1px solid {t.border}; }} QPushButton:hover {{ background: {t.bg_hover}; }}"
+    # Hover only changes the background — the border stays unchanged so no
+    # unexpected colour (e.g. green from a mis-parsed AARRGGBB value) appears.
+    return (
+        f"QPushButton {{ background: {t.bg_card}; border-radius: 10px; "
+        f"border: 1px solid {t.border}; }} "
+        f"QPushButton:hover {{ background: {t.bg_deep}; }}"
+    )
 
 def hotkey_listening_qss(t: Theme) -> str:
-    return f"QPushButton {{ background: {t.bg_card}; border: 1px dashed {t.danger}; border-radius: 10px; }}"
+    return (
+        f"QPushButton {{ background: {t.bg_card}; "
+        f"border: 1px dashed {t.danger}; border-radius: 10px; }}"
+    )
 
 def hotkey_chip_style(t: Theme) -> str:
-    return f"color: {t.text_1}; background: {t.bg_hover}; border-bottom: 2px solid {t.text_3}; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 600; font-family: 'Segoe UI';"
+    # Flat 2D chip: subtle accent tint + accent border.
+    # Qt 8-digit hex is AARRGGBB — alpha must be the FIRST two digits.
+    # Appending alpha after the RGB (e.g. "#7C6FEB18") mis-parses as a
+    # different colour entirely; prepending it gives the correct result.
+    rgb = t.accent.lstrip("#")
+    return (
+        f"color: {t.text_1}; background: #18{rgb}; "
+        f"border: 1px solid #44{rgb}; "
+        f"border-radius: 5px; padding: 2px 8px; "
+        f"font-size: 11px; font-weight: 600; font-family: {_FONT};"
+    )
 
 def shortcut_chip_style(t: Theme) -> str:
     bg = t.accent_purple.replace('#', '#33')
@@ -247,7 +333,12 @@ def api_banner_qss(t: Theme) -> str:
     return f"QFrame {{ background: {t.bg_card}; border-left: 3px solid {t.accent}; border-radius: 10px; }}"
 
 def about_logo_qss(t: Theme) -> str:
-    return f"background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 {t.accent},stop:1 {t.accent_purple}); border-radius: 14px;"
+    # Use a fixed deep-purple as the second gradient stop so the logo looks
+    # equally vivid in both DARK and LIGHT modes.
+    return (
+        f"background: qlineargradient(x1:0,y1:0,x2:1,y2:1, "
+        f"stop:0 {t.accent}, stop:1 #5B4FCF); border-radius: 14px;"
+    )
 
 def shortcut_card_qss(t: Theme) -> str:
     bg = t.accent_purple.replace('#', '#22')
@@ -260,6 +351,13 @@ def theme_toggle_qss(t: Theme) -> str:
         f"border-radius: 8px; font-size: 12px; font-family: 'Segoe UI'; "
         f"padding: 0 12px; text-align: left; }} "
         f"QPushButton:hover {{ background: {bg_hover}; color: {t.accent}; }}"
+    )
+
+def theme_icon_btn_qss(t: Theme) -> str:
+    """QSS for the compact sun/moon toggle button in the title bar."""
+    return (
+        f"QPushButton {{ background: transparent; border: none; border-radius: 6px; }} "
+        f"QPushButton:hover {{ background: {t.bg_hover}; }}"
     )
 
 def sidebar_qss(t: Theme) -> str:

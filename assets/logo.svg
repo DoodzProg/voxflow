@@ -1,0 +1,40 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Voxflow logo — Proposition 3
+    The V shape IS the microphone housing viewed from the front.
+    The top bar closes the housing; tapered horizontal lines inside
+    the V represent the grille — narrowing naturally as the V converges.
+  -->
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#7C6FEB"/>
+      <stop offset="100%" stop-color="#5B4FCF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square background -->
+  <rect width="200" height="200" rx="44" fill="url(#bg3)"/>
+
+  <!-- Bold V — the mic body sides -->
+  <path d="M 34 52 L 100 158 L 166 52"
+        stroke="white" stroke-width="22"
+        stroke-linecap="round" stroke-linejoin="round"
+        fill="none"/>
+
+  <!-- Top housing bar — closes the mic body at the top -->
+  <rect x="23" y="40" width="154" height="20" rx="10" fill="white"/>
+
+  <!--
+    Grille lines inside the V opening — tapered to follow the V shape.
+    Each line sits just inside the inner edges of the arms at that height.
+  -->
+  <!-- y = 82  (arm inner span ≈ 118 px) -->
+  <line x1="61"  y1="82"  x2="139" y2="82"
+        stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+  <!-- y = 104 (arm inner span ≈ 86 px) -->
+  <line x1="72"  y1="104" x2="128" y2="104"
+        stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+  <!-- y = 126 (arm inner span ≈ 54 px) -->
+  <line x1="84"  y1="126" x2="116" y2="126"
+        stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+</svg>
