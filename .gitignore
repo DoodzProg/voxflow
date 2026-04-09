@@ -216,3 +216,4 @@ history.json
 
 # Fichiers de données locales
 !src/voxflow/ui/icons/*.json
+docs/assets/*.gif
