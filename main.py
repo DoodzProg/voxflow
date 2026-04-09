@@ -10,6 +10,38 @@ import sys
 import os
 
 
+def _apply_dwm_rounded_corners(hwnd: int) -> None:
+    """Ask the Windows 11 DWM compositor to round the window corners.
+
+    Uses ``DwmSetWindowAttribute`` with ``DWMWA_WINDOW_CORNER_PREFERENCE``
+    (attribute 33) set to ``DWMWCP_ROUND`` (value 2).
+
+    This is a no-op on Windows 10 and non-Windows platforms — the call fails
+    silently so the app still works everywhere.
+
+    Args:
+        hwnd: Native window handle returned by ``QWidget.winId()``.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes        # noqa: PLC0415
+        import ctypes.wintypes  # noqa: PLC0415
+
+        # DWMWA_WINDOW_CORNER_PREFERENCE = 33
+        # DWMWCP_ROUND                   = 2
+        DWMWA_WINDOW_CORNER_PREFERENCE = 33
+        DWMWCP_ROUND = ctypes.c_int(2)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(DWMWCP_ROUND),
+            ctypes.sizeof(DWMWCP_ROUND),
+        )
+    except Exception:
+        pass  # Non-fatal — Windows 10 / older builds simply ignore this.
+
+
 def _set_app_user_model_id() -> None:
     """Tell Windows to treat Voxflow as its own taskbar entity.
 

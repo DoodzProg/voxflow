@@ -187,7 +187,7 @@ class VoiceOverlay(QWidget):
         lo.addWidget(self._btn_cancel, 0, Qt.AlignVCenter)
 
         # ── Status label ─────────────────────────────────────────────
-        self._lbl = QLabel("Dictée…")
+        self._lbl = QLabel(tr("overlay.dictation"))
         lo.addWidget(self._lbl)
 
         # ── Animated bars ────────────────────────────────────────────
@@ -344,9 +344,38 @@ class VoxflowApp(QMainWindow):
         self.refresh_home_shortcuts()
         self.home_page.btn_clear.clicked.connect(self.clear_history)
 
+        # Apply Windows 11 DWM rounded corners once the native HWND exists.
+        # A zero-delay timer ensures this runs after the first paint event,
+        # which is when the handle is guaranteed to be created.
+        QTimer.singleShot(0, self._apply_dwm_rounded_corners)
+
     # ------------------------------------------------------------------
     # UI Construction
     # ------------------------------------------------------------------
+
+    def _apply_dwm_rounded_corners(self) -> None:
+        """Request Windows 11 DWM rounded corners via ``DwmSetWindowAttribute``.
+
+        Uses ``DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND`` (attribute 33,
+        value 2).  Silently ignored on Windows 10 and non-Windows platforms.
+        Works regardless of whether the app was launched via ``main.py`` or
+        directly via ``python src/voxflow/ui/app.py``.
+        """
+        import sys as _sys  # noqa: PLC0415
+        if _sys.platform != "win32":
+            return
+        try:
+            import ctypes  # noqa: PLC0415
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33
+            preference = ctypes.c_int(2)  # DWMWCP_ROUND
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                int(self.winId()),
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                ctypes.byref(preference),
+                ctypes.sizeof(preference),
+            )
+        except Exception:
+            pass  # Non-fatal — Windows 10 / older builds ignore this.
 
     def _build_tray(self) -> None:
         """Create and show the system tray icon with its context menu."""
@@ -405,7 +434,7 @@ class VoxflowApp(QMainWindow):
             f"font-family: 'Segoe UI'; background: transparent;"
         )
         logo_r.addWidget(self._logo_lbl)
-        self._alpha_badge = PillBadge("v1.0.0", t.accent_purple)
+        self._alpha_badge = PillBadge("v1.0.1", t.accent_purple)
         logo_r.addWidget(self._alpha_badge)
         logo_r.addStretch()
         sb.addLayout(logo_r)
@@ -509,7 +538,7 @@ class VoxflowApp(QMainWindow):
         )
         self.hotkey_listener.hotkey_context_released.connect(self._on_hotkey_released)
         self.hotkey_listener.start()
-        self.update_status("Prêt à dicter")
+        self.update_status(tr("engine.ready"))
 
     # ------------------------------------------------------------------
     # Theme switching
@@ -675,7 +704,7 @@ class VoxflowApp(QMainWindow):
         self.play_beep(start=True)
         self.engine.set_context("")
         self.engine.start_recording()
-        self._show_overlay("Dictée…")
+        self._show_overlay(tr("overlay.dictation"))
 
     def start_context_dictation(self, previous_hwnd: int) -> None:
         """Begin a context-aware dictation session.
@@ -784,7 +813,7 @@ class VoxflowApp(QMainWindow):
             self.engine.set_context(context_text)
             if self._is_dictating:
                 self.engine.start_recording()
-                self._show_overlay("Instructions…")
+                self._show_overlay(tr("overlay.context"))
 
         QTimer.singleShot(50, _extract)
 

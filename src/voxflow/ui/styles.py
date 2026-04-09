@@ -214,11 +214,19 @@ def get_palette(is_dark: bool) -> QPalette:
 # ─────────────────────────────────────────────────────────────
 
 def pill_badge_qss(color: str) -> str:
-    # Remplace "#" par "#26" au début de la couleur pour faire du ARGB valide dans Qt !
-    bg = color.replace('#', '#26')
+    """Return QSS for a pill badge.
+
+    The badge always uses the main accent purple (#7C6FEB) for both text and
+    border so it remains legible in DARK and LIGHT modes.  The *color* argument
+    is kept for API compatibility but is no longer used for the text colour.
+    """
+    # Fixed accent so the badge is always readable regardless of theme.
+    _ACCENT = "#7C6FEB"
     return (
-        f"QLabel {{ background: {bg}; color: {color}; border-radius: 9px; "
-        f"padding: 4px 10px; font-size: 11px; font-weight: 600; font-family: 'Segoe UI'; }}"
+        f"QLabel {{ background: #1A7C6FEB; color: {_ACCENT}; "
+        f"border: 1px solid #407C6FEB; border-radius: 9px; "
+        f"padding: 3px 10px; font-size: 11px; font-weight: 600; "
+        f"font-family: 'Segoe UI'; }}"
     )
 
 def nav_button_qss(active: bool, t: Theme) -> str:
@@ -280,6 +288,18 @@ def btn_ghost_qss(t: Theme) -> str:
         f"font-size: 13px; font-family: 'Segoe UI'; padding: 0 16px; }} "
         f"QPushButton:hover {{ color: {t.accent_light}; background: {bg_hover}; }}"
     )
+
+def btn_outlined_qss(t: Theme) -> str:
+    """Outlined (bordered) button — used for the mic test button."""
+    bg_hover = t.accent.replace('#', '#12')
+    return (
+        f"QPushButton {{ background: transparent; color: {t.text_1}; "
+        f"border: 1px solid {t.border}; border-radius: 8px; "
+        f"font-size: 13px; font-family: 'Segoe UI'; padding: 6px 16px; }} "
+        f"QPushButton:hover {{ color: {t.accent_light}; border-color: {t.accent_light}; "
+        f"background: {bg_hover}; }}"
+    )
+
 
 def line_edit_qss(t: Theme) -> str:
     return (

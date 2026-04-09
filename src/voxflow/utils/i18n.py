@@ -74,9 +74,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Context instructions",
         "fr": "Instructions avec contexte",
     },
+    "general.hk.listening":  {"en": "Press your keys…",       "fr": "Appuyez sur vos touches…"},
+    "general.hk.edit":       {"en": "Edit",                   "fr": "Modifier"},
     "general.hk.mode":       {"en": "Trigger mode",           "fr": "Mode de déclenchement"},
-    "general.hk.mode.hold":  {"en": "Hold (Push-to-Talk)",    "fr": "Maintien (Push-to-Talk)"},
-    "general.hk.mode.toggle":{"en": "Press (Toggle)",         "fr": "Appui simple (Toggle)"},
+    "general.hk.mode.hold":  {"en": "Hold (Push-to-Talk)",    "fr": "Maintien"},
+    "general.hk.mode.toggle":{"en": "Press (Toggle)",         "fr": "Appui simple"},
 
     "general.section.behaviour":   {"en": "Behaviour",          "fr": "Comportement"},
     "general.startup.label":       {"en": "Launch at startup",   "fr": "Démarrage automatique"},
@@ -115,6 +117,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "api.section":       {"en": "Configuration",  "fr": "Configuration"},
     "api.key.label":     {"en": "Groq API Key",   "fr": "Clé API Groq"},
+    "api.get.free.key":  {"en": "Get a free API key →", "fr": "Obtenir une clé gratuite →"},
     "api.btn.verify":    {"en": "Verify key",     "fr": "Vérifier la clé"},
     "api.btn.save":      {"en": "Save",           "fr": "Sauvegarder"},
     "api.verify.empty":    {"en": "Key is empty!",  "fr": "Clé vide !"},
@@ -150,8 +153,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "audio.test.start":     {"en": "Test microphone",     "fr": "Tester le micro"},
     "audio.test.stop":      {
-        "en": "Stop test (0.5 s delay)",
-        "fr": "Arrêter le test (retour 0.5 s)",
+        "en": "Stop test",
+        "fr": "Arrêter",
     },
 
     # ── About page ───────────────────────────────────────────────────────────
@@ -190,6 +193,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Could not reach GitHub.",
         "fr": "Impossible de contacter GitHub.",
     },
+
+    # ── Voice overlay labels ─────────────────────────────────────────────────
+    "overlay.dictation":   {"en": "Dictation…", "fr": "Dictée…"},
+    "overlay.context":     {"en": "Instructions…", "fr": "Instructions…"},
 
     # ── Engine status messages ───────────────────────────────────────────────
     "engine.recording":    {"en": "Recording…",           "fr": "Enregistrement…"},

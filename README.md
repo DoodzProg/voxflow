@@ -1,7 +1,13 @@
 # Voxflow
 
-**Open-source AI-powered voice dictation for Windows.**
+**Open-source AI-powered voice dictation for Windows.**  
 Hold a hotkey, speak, release — your words appear instantly in any application.
+
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="Voxflow app walkthrough" width="720" />
+</p>
+
+> **v1.0.1** · [Download installer](https://github.com/DoodzProg/voxflow/releases/latest) · [GitHub Pages](https://doodzprog.github.io/voxflow/)
 
 ---
 
@@ -13,13 +19,32 @@ No subscription, no cloud account beyond a free Groq API key, no data retained o
 
 ---
 
+## Demo
+
+<p align="center">
+  <img src="docs/assets/example.gif" alt="Voxflow dictation in action" width="720" />
+</p>
+
+---
+
+## Screenshots
+
+| | |
+|:---:|:---:|
+| <img src="docs/assets/screenshot-home.png" alt="Dashboard" width="420"/> | <img src="docs/assets/screenshot-settings.png" alt="Settings" width="420"/> |
+| *Dashboard — stats & shortcuts* | *Settings — hotkeys & language* |
+| <img src="docs/assets/screenshot-audio.png" alt="Audio page" width="420"/> | <img src="docs/assets/screenshot-overlay.png" alt="Overlay" width="420"/> |
+| *Audio — microphone & VU meter* | *Overlay — floating recording bubble* |
+
+---
+
 ## Features
 
 - **Hotkey-driven dictation** — customisable key combos (hold or toggle mode)
 - **Context-aware instructions** — select text first, then dictate a command; the LLM responds using your selection as context
 - **LLM post-processing** — automatic punctuation, capitalisation and filler-word removal
 - **Physical microphone filter** — only real, connectable devices shown (no virtual cables, no loopback entries)
-- **0.5 s loopback test** — hear your own mic before dictating
+- **0.5 s loopback test** — hear your own mic with live VU-meter visualiser
 - **Floating voice overlay** — animated VU-meter bubble shown during recording
 - **Confirmation chimes** — soft two-note sound on start/stop (toggle-able)
 - **Dictation history** — last 10 sessions with one-click copy
@@ -86,7 +111,7 @@ copy .env.example .env
 # Edit .env and set GROQ_API_KEY=gsk_...
 ```
 
-> **Tip:** You can also enter the key directly in the **API Groq** settings page inside the app — no manual file editing needed.
+> **Tip:** You can also enter the key directly in the **API Groq** settings page inside the app — no manual file editing needed. Get a [free API key here](https://console.groq.com/keys).
 
 ---
 
@@ -94,7 +119,7 @@ copy .env.example .env
 
 ```bash
 # Run the application
-python -m voxflow.ui.app
+python main.py
 # or
 python src/voxflow/ui/app.py
 ```
@@ -108,7 +133,7 @@ The app starts minimised to the system tray. Double-click the tray icon to open 
 | Dictation (hold) | `Right Ctrl` + `Right Shift` |
 | Context dictation (hold) | `Right Alt` + `Right Shift` |
 
-Both hotkeys are fully remappable in the **Parametres** settings page.
+Both hotkeys are fully remappable in the **Settings** page.
 
 ### Dictation workflow
 
@@ -119,7 +144,7 @@ Both hotkeys are fully remappable in the **Parametres** settings page.
 ### Context-aware instructions
 
 1. Select some text in the foreground application
-2. Hold `Right Alt + Right Shift` and speak an instruction
+2. Hold `Right Alt + Right Shift` and speak an instruction  
    *(e.g. "Reply that I'm available tomorrow afternoon")*
 3. Release — the LLM rewrites or responds using the selection as context
 

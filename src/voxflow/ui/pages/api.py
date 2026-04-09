@@ -15,7 +15,8 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame,
     QLineEdit, QPushButton, QMessageBox, QApplication,
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices
 
 import voxflow.ui.styles as S
 from voxflow.ui.styles import Theme
@@ -83,9 +84,25 @@ class ApiPage(BasePage):
         fv.setContentsMargins(22, 20, 22, 20)
         fv.setSpacing(14)
 
+        # Label row: "Groq API Key" on left, "Get a free API key →" link on right
+        lbl_row = QHBoxLayout()
+        lbl_row.setSpacing(8)
         self._api_lbl = QLabel(tr("api.key.label"))
         self._api_lbl.setStyleSheet(S.setting_label_style(t))
-        fv.addWidget(self._api_lbl)
+        lbl_row.addWidget(self._api_lbl, 1)
+        self._free_key_btn = QPushButton(tr("api.get.free.key"))
+        self._free_key_btn.setCursor(Qt.PointingHandCursor)
+        self._free_key_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {t.accent_light}; "
+            f"border: none; font-size: 12px; font-family: 'Segoe UI'; "
+            f"padding: 0; text-decoration: underline; }} "
+            f"QPushButton:hover {{ color: {t.accent}; }}"
+        )
+        self._free_key_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://console.groq.com/keys"))
+        )
+        lbl_row.addWidget(self._free_key_btn, 0, Qt.AlignRight | Qt.AlignVCenter)
+        fv.addLayout(lbl_row)
 
         # Input + eye button row
         ir = QHBoxLayout()
@@ -143,6 +160,12 @@ class ApiPage(BasePage):
         self._banner_lbl.setStyleSheet(S.setting_desc_style(t))
         self._form.setStyleSheet(S.card_qss(t))
         self._api_lbl.setStyleSheet(S.setting_label_style(t))
+        self._free_key_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {t.accent_light}; "
+            f"border: none; font-size: 12px; font-family: 'Segoe UI'; "
+            f"padding: 0; text-decoration: underline; }} "
+            f"QPushButton:hover {{ color: {t.accent}; }}"
+        )
         self._api_input.setStyleSheet(S.line_edit_qss(t))
         self._eye_btn.setStyleSheet(S.eye_btn_qss(t))
         reload_svg(self._eye_icon, "eye_off" if self._vis else "eye", t.text_2)
@@ -171,6 +194,7 @@ class ApiPage(BasePage):
         self._sec_config._title_lbl.setText(tr("api.section").upper())
         self._banner_lbl.setText(tr("api.banner"))
         self._api_lbl.setText(tr("api.key.label"))
+        self._free_key_btn.setText(tr("api.get.free.key"))
         self._btn_verify.setText(tr("api.btn.verify"))
         self._btn_save.setText(tr("api.btn.save"))
 

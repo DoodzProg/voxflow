@@ -678,7 +678,8 @@ class HotkeyButton(QPushButton):
             dot.setStyleSheet(
                 f"color: {t.danger}; font-size: 11px; background: transparent;"
             )
-            txt = QLabel("Appuyez sur vos touches...")
+            from voxflow.utils.i18n import tr as _tr  # noqa: PLC0415
+            txt = QLabel(_tr("general.hk.listening"))
             txt.setStyleSheet(
                 f"color: {t.text_2}; font-size: 13px; "
                 f"font-family: 'Segoe UI'; background: transparent;"
@@ -702,7 +703,8 @@ class HotkeyButton(QPushButton):
                     )
                     lo.addWidget(plus)
             lo.addStretch()
-            edit = QLabel("Modifier")
+            from voxflow.utils.i18n import tr as _tr  # noqa: PLC0415
+            edit = QLabel(_tr("general.hk.edit"))
             edit.setStyleSheet(
                 f"color: {t.text_3}; font-size: 11px; "
                 f"font-family: 'Segoe UI'; background: transparent;"

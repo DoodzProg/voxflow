@@ -10,6 +10,7 @@ from abc import abstractmethod
 from typing import Optional
 
 from PySide6.QtWidgets import QScrollArea, QWidget
+from PySide6.QtCore import Qt
 
 from voxflow.ui.styles import Theme
 
@@ -31,10 +32,8 @@ class BasePage(QScrollArea):
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        self.setHorizontalScrollBarPolicy(
-            # PySide6 enum imported lazily to keep the module lightweight
-            __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.ScrollBarAlwaysOff
-        )
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     @abstractmethod
     def retheme(self, t: Theme) -> None:

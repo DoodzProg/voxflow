@@ -29,7 +29,7 @@ from voxflow.ui.pages.base import BasePage
 from voxflow.utils.i18n import tr
 
 # Bump this constant when releasing a new version.
-_CURRENT_VERSION = "1.0.0"
+_CURRENT_VERSION = "1.0.1"
 _REPO = "DoodzProg/voxflow"
 
 

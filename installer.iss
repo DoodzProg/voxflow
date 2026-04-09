@@ -1,5 +1,5 @@
 ; installer.iss
-; Inno Setup 6 script for Voxflow v1.0.0
+; Inno Setup 6 script for Voxflow v1.0.1
 ;
 ; Prerequisites:
 ;   1. Run `pyinstaller voxflow.spec` — produces dist\Voxflow\
@@ -8,7 +8,7 @@
 ;   4. Output:   dist\VoxflowSetup.exe
 
 #define AppName      "Voxflow"
-#define AppVersion   "1.0.0"
+#define AppVersion   "1.0.1"
 #define AppPublisher "DoodzProg"
 #define AppURL       "https://github.com/DoodzProg/voxflow"
 #define AppExeName   "Voxflow.exe"
@@ -41,7 +41,6 @@ LZMAUseSeparateProcess=yes
 
 ; --- Appearance ---
 WizardStyle=modern
-WizardSmallImageFile=assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 
 ; --- Misc ---

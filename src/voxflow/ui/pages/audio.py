@@ -19,12 +19,14 @@ import threading
 import time
 from typing import Optional
 
+import numpy as np
 import sounddevice as sd
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QPainter
 
 import voxflow.ui.styles as S
 from voxflow.ui.styles import Theme
@@ -118,6 +120,93 @@ def get_real_microphones() -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────
+#  MIC LEVEL BAR  (VU-meter shown during loopback test)
+# ─────────────────────────────────────────────────────────────
+
+class _MicLevelBar(QWidget):
+    """Animated VU-meter bar widget for the microphone loopback test.
+
+    Slightly wider than the overlay version (7 bars, 68×30 px) so it is
+    readable even without active speakers.  The level is updated via a
+    :class:`~PySide6.QtCore.QTimer` that polls
+    :attr:`MicTester.current_level` on the main thread.
+    """
+
+    _BAR_COUNT = 7
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(68, 30)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: transparent;")
+        self._levels: list[float] = [0.0] * self._BAR_COUNT
+        self._targets: list[float] = [0.0] * self._BAR_COUNT
+        self._timer = QTimer(self)
+        self._timer.setInterval(35)  # ~28 fps
+        self._timer.timeout.connect(self._tick)
+
+    def start(self) -> None:
+        """Begin the animation loop."""
+        self._timer.start()
+
+    def stop(self) -> None:
+        """Stop the animation loop and reset all bars to zero."""
+        self._timer.stop()
+        self._levels  = [0.0] * self._BAR_COUNT
+        self._targets = [0.0] * self._BAR_COUNT
+        self.update()
+
+    def push_level(self, rms: float) -> None:
+        """Set a new target RMS level; bars animate toward it smoothly.
+
+        Args:
+            rms: Normalised RMS value in ``[0.0, 1.0]``.
+        """
+        import random  # noqa: PLC0415
+        for i in range(self._BAR_COUNT):
+            # Each bar gets a randomised fraction of the RMS for organic motion.
+            self._targets[i] = min(1.0, rms * (0.5 + random.random() * 1.0))
+
+    def _tick(self) -> None:
+        """Smooth each bar toward its target via exponential decay."""
+        changed = False
+        for i in range(self._BAR_COUNT):
+            diff = self._targets[i] - self._levels[i]
+            self._levels[i] += diff * 0.28
+            if abs(diff) > 0.005:
+                changed = True
+            # Decay toward zero when no new level is pushed.
+            self._targets[i] *= 0.88
+        if changed:
+            self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        """Draw seven rounded bars whose heights scale with their level."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+
+        accent = QColor(_t().accent)
+        bar_w, gap = 5, 4
+        total_w = self._BAR_COUNT * bar_w + (self._BAR_COUNT - 1) * gap
+        sx = (self.width() - total_w) // 2
+        cy = self.height() // 2
+        base_h, max_h = 4, 22
+
+        for i, lvl in enumerate(self._levels):
+            dist = abs(i - self._BAR_COUNT // 2)
+            h = base_h + lvl * max_h * (1.0 - dist * 0.18)
+            x = sx + i * (bar_w + gap)
+            y = cy - h / 2
+            color = QColor(accent)
+            color.setAlphaF(0.25 + lvl * 0.75)
+            p.setBrush(color)
+            p.drawRoundedRect(int(x), int(y), bar_w, int(h), 2, 2)
+
+        p.end()
+
+
+# ─────────────────────────────────────────────────────────────
 #  MIC TESTER
 # ─────────────────────────────────────────────────────────────
 
@@ -139,6 +228,7 @@ class MicTester:
 
     def __init__(self) -> None:
         self.is_running: bool = False
+        self.current_level: float = 0.0
         self._thread: Optional[threading.Thread] = None
 
     def start(self, mic_name: str) -> None:
@@ -160,6 +250,7 @@ class MicTester:
     def stop(self) -> None:
         """Signal the loopback thread to stop and wait for it to finish."""
         self.is_running = False
+        self.current_level = 0.0
         if self._thread:
             self._thread.join(timeout=1.0)
 
@@ -181,6 +272,7 @@ class MicTester:
 
         def _in_cb(indata, frames, time_info, status) -> None:  # noqa: ARG001
             buf.put(indata.copy())
+            self.current_level = float(np.sqrt(np.mean(indata ** 2))) * 8.0
 
         try:
             with sd.InputStream(
@@ -236,25 +328,56 @@ class AudioPage(BasePage):
 
         # Microphone combo -------------------------------------------
         self._mic_combo = StyledComboBox()
+        self._mic_combo.setMaximumWidth(260)
         mics = get_real_microphones()
-        self._mic_combo.addItems(mics if mics else [tr("audio.mic.none")])
+        # Add full names to dropdown but display truncated in the combo header
+        for name in (mics if mics else [tr("audio.mic.none")]):
+            display = (name[:28] + "…") if len(name) > 30 else name
+            self._mic_combo.addItem(display, userData=name)
         saved = ConfigManager.get("MICROPHONE", "System Default")
-        if saved in mics:
-            self._mic_combo.setCurrentText(saved)
-        self._mic_combo.currentTextChanged.connect(
-            lambda v: ConfigManager.set("MICROPHONE", v)
+        for i in range(self._mic_combo.count()):
+            if self._mic_combo.itemData(i) == saved:
+                self._mic_combo.setCurrentIndex(i)
+                break
+        self._mic_combo.currentIndexChanged.connect(
+            lambda i: ConfigManager.set(
+                "MICROPHONE", self._mic_combo.itemData(i) or self._mic_combo.itemText(i)
+            )
         )
         self._mic_card.add(
             tr("audio.mic.label"), tr("audio.mic.desc"), self._mic_combo
         )
 
-        # Test button — loopback playback with 0.5 s artificial delay ------
+        # Test button row — [VU meter bar] + [button] in a container ----------
+        self._test_container = QWidget()
+        self._test_container.setStyleSheet("background: transparent;")
+        _row = QHBoxLayout(self._test_container)
+        _row.setContentsMargins(0, 0, 0, 0)
+        _row.setSpacing(8)
+
+        self._level_bar = _MicLevelBar()
+        self._level_bar.setVisible(False)
+        _row.addWidget(self._level_bar, 0, Qt.AlignVCenter)
+
         self._test_btn = btn_ghost(tr("audio.test.start"))
+        self._test_btn.setFixedWidth(140)
+        self._test_btn.setStyleSheet(S.btn_outlined_qss(_t()))
         self._test_btn.clicked.connect(self._toggle_test)
+        _row.addWidget(self._test_btn, 0, Qt.AlignVCenter)
+
         self._mic_card.add(
             tr("audio.test.label"),
             tr("audio.test.desc"),
-            self._test_btn,
+            self._test_container,
+        )
+
+        # Timer: polls current_level from audio thread → VU meter
+        self._level_timer = QTimer(self)
+        self._level_timer.setInterval(35)
+        self._level_timer.timeout.connect(
+            lambda: self._level_bar.push_level(
+                min(1.0, self._mic_tester.current_level)
+            )
         )
 
         root.addWidget(self._mic_card)
@@ -276,7 +399,7 @@ class AudioPage(BasePage):
         self._mic_card.retheme(t)
         # Test button: restore ghost style (don't reset if active — user sees it)
         if not self._mic_tester.is_running:
-            self._test_btn.setStyleSheet(S.btn_ghost_qss(t))
+            self._test_btn.setStyleSheet(S.btn_outlined_qss(t))
 
     # ------------------------------------------------------------------
     # Slots
@@ -297,11 +420,18 @@ class AudioPage(BasePage):
     def _toggle_test(self) -> None:
         """Start or stop the microphone loopback test."""
         if self._mic_tester.is_running:
+            self._level_timer.stop()
+            self._level_bar.stop()
+            self._level_bar.setVisible(False)
             self._mic_tester.stop()
             self._test_btn.setText(tr("audio.test.start"))
-            self._test_btn.setStyleSheet(S.btn_ghost_qss(_t()))
+            self._test_btn.setStyleSheet(S.btn_outlined_qss(_t()))
         else:
-            self._mic_tester.start(self._mic_combo.currentText())
+            _full_name = self._mic_combo.currentData() or self._mic_combo.currentText()
+            self._mic_tester.start(_full_name)
+            self._level_bar.setVisible(True)
+            self._level_bar.start()
+            self._level_timer.start()
             self._test_btn.setText(tr("audio.test.stop"))
             self._test_btn.setStyleSheet(
                 "QPushButton { color: #EF4444; border: 1px solid #EF4444; "
