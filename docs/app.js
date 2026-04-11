@@ -1,7 +1,7 @@
 // docs/app.js
 /**
  * app.js
- * Voxflow landing page — behaviour, micro-interactions, and i18n.
+ * AcouZ landing page — behaviour, micro-interactions, and i18n.
  *
  * Responsibilities:
  *  - EN / FR translation system with localStorage persistence
@@ -21,7 +21,7 @@ const TRANSLATIONS = {
     'nav.github':          'GitHub',
     'nav.download':        'Download',
 
-    'hero.badge':          'v1.0.1 \u2014 Free &amp; Open Source',
+    'hero.badge':          'v1.0.2 \u2014 Free &amp; Open Source',
     'hero.h1a':            'Speak.',
     'hero.h1b':            "Don't type.",
     'hero.sub':            'Hold a hotkey, speak, release \u2014 your words appear instantly in any application. Powered by Groq Whisper. No subscription, no cloud account.',
@@ -29,7 +29,7 @@ const TRANSLATIONS = {
     'hero.cta.github':     'View on GitHub',
     'hero.note':           'Windows 10 / 11 \u00b7 Free Groq API key required',
 
-    'demo.title':          'Voxflow 1.0.1',
+    'demo.title':          'AcouZ 1.0.2',
     'example.eyebrow':     'In action',
     'example.title':       'Hold. Speak. Done.',
     'example.titlebar':    'Live dictation',
@@ -82,8 +82,8 @@ const TRANSLATIONS = {
 
     'dl.title':            'Ready to stop typing?',
     'dl.body':             'Free download. No account. No subscription. Just your voice.',
-    'dl.btn':              'Download Voxflow for Windows',
-    'dl.badge':            'Windows 10 / 11 (x64) \u00b7 v1.0.1',
+    'dl.btn':              'Download AcouZ for Windows',
+    'dl.badge':            'Windows 10 / 11 (x64) \u00b7 v1.0.2',
 
     'footer.releases':     'Releases',
     'footer.license':      'MIT License',
@@ -97,7 +97,7 @@ const TRANSLATIONS = {
     'nav.github':          'GitHub',
     'nav.download':        'T\u00e9l\u00e9charger',
 
-    'hero.badge':          'v1.0.1 \u2014 Gratuit &amp; Open Source',
+    'hero.badge':          'v1.0.2 \u2014 Gratuit &amp; Open Source',
     'hero.h1a':            'Parle.',
     'hero.h1b':            "Arr\u00eate d'\u00e9crire.",
     'hero.sub':            'Maintiens un raccourci, parle, rel\u00e2che \u2014 tes mots apparaissent instantan\u00e9ment dans n\u2019importe quelle application. Propuls\u00e9 par Groq Whisper. Sans abonnement, sans compte cloud.',
@@ -105,7 +105,7 @@ const TRANSLATIONS = {
     'hero.cta.github':     'Voir sur GitHub',
     'hero.note':           'Windows 10 / 11 \u00b7 Cl\u00e9 API Groq gratuite requise',
 
-    'demo.title':          'Voxflow 1.0.1',
+    'demo.title':          'AcouZ 1.0.2',
     'example.eyebrow':     'En action',
     'example.title':       'Maintiens. Parle. C\u2019est fait.',
     'example.titlebar':    'Dict\u00e9e en direct',
@@ -158,8 +158,8 @@ const TRANSLATIONS = {
 
     'dl.title':            "Pr\u00eat \u00e0 arr\u00eater d'\u00e9crire\u00a0?",
     'dl.body':             'T\u00e9l\u00e9chargement gratuit. Sans compte. Sans abonnement. Juste ta voix.',
-    'dl.btn':              'T\u00e9l\u00e9charger Voxflow pour Windows',
-    'dl.badge':            'Windows 10 / 11 (x64) \u00b7 v1.0.1',
+    'dl.btn':              'T\u00e9l\u00e9charger AcouZ pour Windows',
+    'dl.badge':            'Windows 10 / 11 (x64) \u00b7 v1.0.2',
 
     'footer.releases':     'Versions',
     'footer.license':      'Licence MIT',
@@ -169,7 +169,7 @@ const TRANSLATIONS = {
 };
 
 // ── i18n core ─────────────────────────────────────────────────────
-const LANG_STORAGE_KEY = 'voxflow_lang';
+const LANG_STORAGE_KEY = 'AcouZ_lang';
 
 /**
  * Apply a language to all [data-i18n] elements on the page.
@@ -302,10 +302,10 @@ function applyLang(lang) {
 
 // ── Download button — track clicks ───────────────────────────────
 (function initDownloadTracking() {
-  const buttons = document.querySelectorAll('a[href*="VoxflowSetup.exe"]');
+  const buttons = document.querySelectorAll('a[href*="AcouZSetup.exe"]');
   buttons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      console.info('[Voxflow] Download initiated');
+      console.info('[AcouZ] Download initiated');
     });
   });
 })();

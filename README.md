@@ -1,19 +1,19 @@
-# Voxflow
+# AcouZ
 
 **Open-source AI-powered voice dictation for Windows.**  
 Hold a hotkey, speak, release — your words appear instantly in any application.
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Voxflow app walkthrough" width="720" />
+  <img src="docs/assets/demo.gif" alt="AcouZ app walkthrough" width="720" />
 </p>
 
-> **v1.0.1** · [Download installer](https://github.com/DoodzProg/voxflow/releases/latest) · [GitHub Pages](https://doodzprog.github.io/voxflow/)
+> **v1.0.2** · [Download installer](https://github.com/DoodzProg/acouz/releases/latest) · [GitHub Pages](https://doodzprog.github.io/acouz/)
 
 ---
 
 ## Overview
 
-Voxflow is a lightweight, privacy-friendly dictation assistant that runs entirely on your machine (except for the Groq API call). It captures audio from your microphone, transcribes it with **Groq Whisper**, optionally cleans and reformats it with **Groq Llama-3**, then injects the result at your cursor via the clipboard — in under a second.
+AcouZ is a lightweight, privacy-friendly dictation assistant that runs entirely on your machine (except for the Groq API call). It captures audio from your microphone, transcribes it with **Groq Whisper**, optionally cleans and reformats it with **Groq Llama-3**, then injects the result at your cursor via the clipboard — in under a second.
 
 No subscription, no cloud account beyond a free Groq API key, no data retained on external servers.
 
@@ -22,7 +22,7 @@ No subscription, no cloud account beyond a free Groq API key, no data retained o
 ## Demo
 
 <p align="center">
-  <img src="docs/assets/example.gif" alt="Voxflow dictation in action" width="720" />
+  <img src="docs/assets/example.gif" alt="AcouZ dictation in action" width="720" />
 </p>
 
 ---
@@ -58,12 +58,12 @@ No subscription, no cloud account beyond a free Groq API key, no data retained o
 ## Architecture
 
 ```
-src/voxflow/
+src/AcouZ/
 ├── core/
 │   ├── engine.py        # DictationEngine (QThread) — STT + LLM pipeline
 │   └── hotkey.py        # HotkeyListener (QThread) — 50 ms keyboard poll
 ├── ui/
-│   ├── app.py           # VoxflowApp (QMainWindow) + VoiceOverlay + entry point
+│   ├── app.py           # AcouZApp (QMainWindow) + VoiceOverlay + entry point
 │   ├── components.py    # Reusable widgets: NavButton, StatCard, HotkeyButton ...
 │   ├── styles.py        # Theme dataclasses (DARK/LIGHT), ICONS dict, QSS helpers
 │   └── pages/
@@ -77,7 +77,7 @@ src/voxflow/
     └── config.py        # ConfigManager — reads/writes .env file
 ```
 
-**Theme-switching design:** each page is a class inheriting `BasePage` with a `retheme(t: Theme)` method. `VoxflowApp.apply_theme()` updates the global theme state, applies a new QPalette + QSS, then calls `retheme()` on every page — no widget is rebuilt, so all user-input state (API key field, selected microphone, toggles) is preserved across switches.
+**Theme-switching design:** each page is a class inheriting `BasePage` with a `retheme(t: Theme)` method. `AcouZApp.apply_theme()` updates the global theme state, applies a new QPalette + QSS, then calls `retheme()` on every page — no widget is rebuilt, so all user-input state (API key field, selected microphone, toggles) is preserved across switches.
 
 ---
 
@@ -96,8 +96,8 @@ src/voxflow/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/DoodzProg/voxflow.git
-cd voxflow
+git clone https://github.com/DoodzProg/acouz.git
+cd acouz
 
 # 2. Create and activate a virtual environment
 python -m venv venv
@@ -121,7 +121,7 @@ copy .env.example .env
 # Run the application
 python main.py
 # or
-python src/voxflow/ui/app.py
+python src/AcouZ/ui/app.py
 ```
 
 The app starts minimised to the system tray. Double-click the tray icon to open the settings window.
@@ -217,8 +217,8 @@ python create_icon.py
 
 ```bash
 pip install pyinstaller
-pyinstaller voxflow.spec
-# Output: dist\Voxflow\Voxflow.exe
+pyinstaller AcouZ.spec
+# Output: dist\AcouZ\AcouZ.exe
 ```
 
 ### Create a Windows installer with Inno Setup
@@ -227,11 +227,11 @@ Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then compile the prov
 
 ```bash
 iscc installer.iss
-# Output: dist\VoxflowSetup.exe  (~15–20 MB)
+# Output: dist\AcouZSetup.exe  (~15–20 MB)
 ```
 
 The installer:
-- Installs to `%LocalAppData%\Voxflow` (no admin rights required)
+- Installs to `%LocalAppData%\AcouZ` (no admin rights required)
 - Creates Start Menu and optional Desktop shortcuts
 - Registers an uninstaller in *Add/Remove Programs*
 - Honours the in-app *Launch at Windows startup* toggle (`HKCU` registry)

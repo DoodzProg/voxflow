@@ -1,8 +1,8 @@
 /*
  * style.css
- * Voxflow landing page — visual styles.
+ * AcouZ landing page — visual styles.
  *
- * Design tokens mirror the app's DARK theme (src/voxflow/ui/styles.py).
+ * Design tokens mirror the app's DARK theme (src/acouz/ui/styles.py).
  * Layout: mobile-first, single breakpoint at 768 px and 1024 px.
  */
 
@@ -15,16 +15,16 @@
 
 /* ── Design tokens ───────────────────────────────────────────────── */
 :root {
-  --bg:           #0F0E17;
-  --bg-card:      #13111F;
-  --bg-card2:     #1A1830;
-  --border:       #2A2640;
-  --accent:       #7C6FEB;
-  --accent-lt:    #C4BFFA;
-  --accent-dark:  #5B4FCF;
-  --text-1:       #E8E6F8;
-  --text-2:       #A9A6C3;
-  --text-3:       #6B6885;
+  --bg:           #121814;
+  --bg-card:      #1E2822;
+  --bg-card2:     #181F1B;
+  --border:       #2E3D37;
+  --accent:       #1DB954;
+  --accent-lt:    #1ED760;
+  --accent-dark:  #17A34A;
+  --text-1:       #E8EDE9;
+  --text-2:       #8FA89C;
+  --text-3:       #526560;
   --radius-lg:    24px;
   --radius-md:    14px;
   --radius-sm:    8px;
@@ -83,7 +83,7 @@ body::before {
 .btn-primary:hover {
   background: var(--accent-dark);
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(124, 111, 235, 0.35);
+  box-shadow: 0 8px 24px rgba(29, 185, 84, 0.35);
 }
 
 .btn-ghost {
@@ -94,7 +94,7 @@ body::before {
 .btn-ghost:hover {
   color: var(--text-1);
   border-color: var(--accent);
-  background: rgba(124, 111, 235, 0.08);
+  background: rgba(29, 185, 84, 0.08);
 }
 
 /* ── Navigation ──────────────────────────────────────────────────── */
@@ -103,7 +103,7 @@ body::before {
   top: 0; left: 0; right: 0;
   z-index: 100;
   backdrop-filter: blur(20px) saturate(180%);
-  background: rgba(15, 14, 23, 0.75);
+  background: rgba(18, 24, 20, 0.75);
   border-bottom: 1px solid var(--border);
   transition: border-color var(--transition);
 }
@@ -152,7 +152,7 @@ body::before {
   top: 50%; left: 50%;
   transform: translate(-50%, -60%);
   width: 700px; height: 500px;
-  background: radial-gradient(ellipse, rgba(124, 111, 235, 0.18) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(29, 185, 84, 0.18) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -165,8 +165,8 @@ body::before {
   gap: 8px;
   padding: 6px 14px;
   border-radius: 20px;
-  background: rgba(124, 111, 235, 0.12);
-  border: 1px solid rgba(124, 111, 235, 0.3);
+  background: rgba(29, 185, 84, 0.12);
+  border: 1px solid rgba(29, 185, 84, 0.3);
   font-size: 13px;
   color: var(--accent-lt);
   margin-bottom: 32px;
@@ -236,7 +236,7 @@ body::before {
   background: var(--bg-card);
   overflow: hidden;
   box-shadow:
-    0 0 0 1px rgba(124, 111, 235, 0.1),
+    0 0 0 1px rgba(29, 185, 84, 0.1),
     0 40px 80px rgba(0, 0, 0, 0.5);
 }
 
@@ -259,7 +259,7 @@ body::before {
 .demo-body {
   /* exact ratio of demo.gif: 1290/829 ≈ 1.557 */
   aspect-ratio: 1290 / 829;
-  background: #0F0E17;
+  background: #121814;
   overflow: hidden;
   line-height: 0;
 }
@@ -360,7 +360,7 @@ body::before {
 }
 
 .feat-card:hover {
-  border-color: rgba(124, 111, 235, 0.4);
+  border-color: rgba(29, 185, 84, 0.4);
   transform: translateY(-3px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
 }
@@ -370,7 +370,7 @@ body::before {
 .feat-icon {
   width: 44px; height: 44px;
   border-radius: var(--radius-sm);
-  background: rgba(124, 111, 235, 0.12);
+  background: rgba(29, 185, 84, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -447,8 +447,8 @@ body::before {
 .opensource { padding: 0 0 120px; }
 
 .oss-card {
-  background: linear-gradient(135deg, rgba(124, 111, 235, 0.1) 0%, rgba(91, 79, 207, 0.05) 100%);
-  border: 1px solid rgba(124, 111, 235, 0.25);
+  background: linear-gradient(135deg, rgba(29, 185, 84, 0.1) 0%, rgba(23, 163, 74, 0.05) 100%);
+  border: 1px solid rgba(29, 185, 84, 0.25);
   border-radius: var(--radius-lg);
   padding: 64px 48px;
   text-align: center;
@@ -489,7 +489,7 @@ body::before {
   top: -120px; left: 50%;
   transform: translateX(-50%);
   width: 500px; height: 300px;
-  background: radial-gradient(ellipse, rgba(124, 111, 235, 0.2), transparent 70%);
+  background: radial-gradient(ellipse, rgba(29, 185, 84, 0.2), transparent 70%);
   pointer-events: none;
 }
 
@@ -550,8 +550,8 @@ footer {
   display: inline-block;
   padding: 3px 10px;
   border-radius: 6px;
-  background: rgba(124, 111, 235, 0.12);
-  border: 1px solid rgba(124, 111, 235, 0.3);
+  background: rgba(29, 185, 84, 0.12);
+  border: 1px solid rgba(29, 185, 84, 0.3);
   font-size: 12px;
   font-weight: 600;
   color: var(--accent-lt);
@@ -621,7 +621,7 @@ footer {
   border: 1px solid var(--border);
   background: var(--bg-card);
   box-shadow:
-    0 0 0 1px rgba(124, 111, 235, 0.1),
+    0 0 0 1px rgba(29, 185, 84, 0.1),
     0 40px 80px rgba(0, 0, 0, 0.5);
 }
 

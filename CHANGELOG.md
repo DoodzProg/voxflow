@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Voxflow are documented here.  
+All notable changes to AcouZ are documented here.  
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/).
 
@@ -47,7 +47,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 #### Build
 - `main.py` — clean entry point for dev and PyInstaller frozen modes
-- `voxflow.spec` — PyInstaller one-folder spec (sounddevice DLL auto-located, all hidden imports)
+- `AcouZ.spec` — PyInstaller one-folder spec (sounddevice DLL auto-located, all hidden imports)
 - `create_icon.py` — generates `assets/icon.ico` from `assets/logo.svg` via PySide6 + Pillow
 
 ### Fixed

@@ -1,4 +1,4 @@
-# Contributing to Voxflow
+# Contributing to AcouZ
 
 Thank you for your interest in contributing! Here's how to get involved.
 
@@ -30,7 +30,7 @@ Thank you for your interest in contributing! Here's how to get involved.
 
 ## Commit Message Format
 
-Voxflow follows the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+AcouZ follows the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
 ```
 <type>(<scope>): <short summary>

@@ -1,5 +1,7 @@
 """
-main.py
+AcouZ - Open-source AI voice dictation
+Copyright (c) 2025-2026 DoodzProg
+Licensed under the MIT License
 
 Application entry point used by both the development runner and PyInstaller.
 All heavy imports happen inside the function so that the frozen exe starts
@@ -43,7 +45,7 @@ def _apply_dwm_rounded_corners(hwnd: int) -> None:
 
 
 def _set_app_user_model_id() -> None:
-    """Tell Windows to treat Voxflow as its own taskbar entity.
+    """Tell Windows to treat AcouZ as its own taskbar entity.
 
     Without this call Windows groups the process under the generic Python
     interpreter icon.  Must be called before any window or QApplication is
@@ -54,15 +56,15 @@ def _set_app_user_model_id() -> None:
     try:
         import ctypes  # noqa: PLC0415
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "DoodzProg.Voxflow.1.0"
+            "DoodzProg.AcouZ.1.0"
         )
     except Exception:
         pass  # Non-fatal — the app still works, just with the Python icon.
 
 
 def main() -> None:
-    """Bootstrap the Voxflow PySide6 application."""
-    # Register Voxflow's own taskbar identity before anything else.
+    """Bootstrap the AcouZ PySide6 application."""
+    # Register AcouZ's own taskbar identity before anything else.
     _set_app_user_model_id()
 
     # When running from a PyInstaller bundle (_MEIPASS is set), the bundled
@@ -72,9 +74,9 @@ def main() -> None:
         if src_dir not in sys.path:
             sys.path.insert(0, src_dir)
 
-    from voxflow.utils.config import ConfigManager  # noqa: PLC0415
-    from voxflow.ui.app import VoxflowApp            # noqa: PLC0415
-    from PySide6.QtWidgets import QApplication       # noqa: PLC0415
+    from acouz.utils.config import ConfigManager  # noqa: PLC0415
+    from acouz.ui.app import AcouZApp             # noqa: PLC0415
+    from PySide6.QtWidgets import QApplication     # noqa: PLC0415
 
     ConfigManager.initialize()
 
@@ -82,7 +84,7 @@ def main() -> None:
     app.setStyle("Fusion")
     app.setQuitOnLastWindowClosed(False)
 
-    window = VoxflowApp()
+    window = AcouZApp()
     window.show()
     sys.exit(app.exec())
 

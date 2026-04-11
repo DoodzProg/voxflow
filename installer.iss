@@ -1,18 +1,18 @@
 ; installer.iss
-; Inno Setup 6 script for Voxflow v1.0.1
+; Inno Setup 6 script for AcouZ v1.0.2
 ;
 ; Prerequisites:
-;   1. Run `pyinstaller voxflow.spec` — produces dist\Voxflow\
+;   1. Run `pyinstaller acouz.spec` — produces dist\AcouZ\
 ;   2. Install Inno Setup 6: https://jrsoftware.org/isinfo.php
 ;   3. Compile:  iscc installer.iss
-;   4. Output:   dist\VoxflowSetup.exe
+;   4. Output:   dist\AcouZSetup.exe
 
-#define AppName      "Voxflow"
-#define AppVersion   "1.0.1"
+#define AppName      "AcouZ"
+#define AppVersion   "1.0.2"
 #define AppPublisher "DoodzProg"
-#define AppURL       "https://github.com/DoodzProg/voxflow"
-#define AppExeName   "Voxflow.exe"
-#define SourceDir    "dist\Voxflow"
+#define AppURL       "https://github.com/DoodzProg/acouz"
+#define AppExeName   "AcouZ.exe"
+#define SourceDir    "dist\AcouZ"
 
 [Setup]
 ; --- Identity ---
@@ -33,8 +33,8 @@ PrivilegesRequired=lowest
 
 ; --- Output ---
 OutputDir=dist
-OutputBaseFilename=VoxflowSetup
-SetupIconFile=assets\icon.ico
+OutputBaseFilename=AcouZSetup
+SetupIconFile=assets\logo.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 LZMAUseSeparateProcess=yes
@@ -62,10 +62,10 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 [Icons]
 ; Start Menu shortcut
-Name: "{group}\{#AppName}";        Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"
-Name: "{group}\Uninstall Voxflow"; Filename: "{uninstallexe}"
+Name: "{group}\{#AppName}";       Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{group}\Uninstall AcouZ";  Filename: "{uninstallexe}"
 ; Desktop shortcut (optional task)
-Name: "{autodesktop}\{#AppName}";  Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
 ; Offer to launch the app immediately after installation.
@@ -87,7 +87,7 @@ begin
   RegKey := 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run';
   NewPath := ExpandConstant('"{app}\{#AppExeName}"');
 
-  // Only update if a Voxflow entry already exists (user had it enabled).
+  // Only update if an AcouZ entry already exists (user had it enabled).
   if RegQueryStringValue(HKCU, RegKey, '{#AppName}', OldPath) then
   begin
     RegWriteStringValue(HKCU, RegKey, '{#AppName}', NewPath);

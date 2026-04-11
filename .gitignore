@@ -215,5 +215,5 @@ src/history.json
 history.json
 
 # Fichiers de données locales
-!src/voxflow/ui/icons/*.json
+!src/AcouZ/ui/icons/*.json
 docs/assets/*.gif

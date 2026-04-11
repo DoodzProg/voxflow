@@ -23,7 +23,7 @@ assignees: DoodzProg
 ## Environment
 - Windows version: 
 - Python version: 
-- Voxflow version / commit: 
+- AcouZ version / commit: 
 
 ## Additional Context
 <!-- Logs, screenshots, etc. -->

@@ -4,11 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Voxflow — AI Voice Dictation for Windows</title>
-  <meta name="description" content="Hold a key, speak, release. Voxflow transcribes your voice into any application in under a second — powered by Groq Whisper." />
-  <meta property="og:title"       content="Voxflow — AI Voice Dictation for Windows" />
+  <title>AcouZ — AI Voice Dictation for Windows</title>
+  <meta name="description" content="Hold a key, speak, release. AcouZ transcribes your voice into any application in under a second — powered by Groq Whisper." />
+  <meta property="og:title"       content="AcouZ — AI Voice Dictation for Windows" />
   <meta property="og:description" content="Hold a key, speak, release. Free, open-source, no subscription." />
-  <meta property="og:image"       content="https://doodzprog.github.io/voxflow/assets/preview.png" />
+  <meta property="og:image"       content="https://doodzprog.github.io/AcouZ/assets/preview.png" />
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -25,25 +25,22 @@
       <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <defs>
           <linearGradient id="logo-nav" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%"   stop-color="#7C6FEB"/>
-            <stop offset="100%" stop-color="#5B4FCF"/>
+            <stop offset="0%"   stop-color="#1E2822"/>
+            <stop offset="100%" stop-color="#121814"/>
           </linearGradient>
         </defs>
         <rect width="200" height="200" rx="44" fill="url(#logo-nav)"/>
-        <path d="M 34 52 L 100 158 L 166 52" stroke="white" stroke-width="22"
-              stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <rect x="23" y="40" width="154" height="20" rx="10" fill="white"/>
-        <line x1="61"  y1="82"  x2="139" y2="82"  stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
-        <line x1="72"  y1="104" x2="128" y2="104" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
-        <line x1="84"  y1="126" x2="116" y2="126" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+        <line x1="40" y1="164" x2="100" y2="36" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="100" y1="36" x2="160" y2="164" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="66,108 88,88 112,128 134,108" fill="none" stroke="#1DB954" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      Voxflow
+      AcouZ
     </div>
 
     <nav class="nav-links" aria-label="Main navigation">
       <a href="#features" data-i18n="nav.features">Features</a>
       <a href="#how" data-i18n="nav.how">How it works</a>
-      <a href="https://github.com/DoodzProg/voxflow" data-i18n="nav.github">GitHub</a>
+      <a href="https://github.com/DoodzProg/acouz" data-i18n="nav.github">GitHub</a>
     </nav>
 
     <button class="lang-btn" id="lang-toggle" aria-label="Switch language">
@@ -52,7 +49,7 @@
     </button>
 
     <a class="btn btn-primary"
-       href="https://github.com/DoodzProg/voxflow/releases/latest/download/VoxflowSetup.exe">
+       href="https://github.com/DoodzProg/acouz/releases/latest/download/AcouZSetup.exe">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -74,7 +71,7 @@
 
     <div class="hero-badge" role="status">
       <span class="dot" aria-hidden="true"></span>
-      <span data-i18n="hero.badge">v1.0.1 &mdash; Free &amp; Open Source</span>
+      <span data-i18n="hero.badge">v1.0.2 &mdash; Free &amp; Open Source</span>
     </div>
 
     <h1 id="hero-title">
@@ -90,7 +87,7 @@
 
     <div class="hero-actions">
       <a class="btn btn-primary btn-hero"
-         href="https://github.com/DoodzProg/voxflow/releases/latest/download/VoxflowSetup.exe">
+         href="https://github.com/DoodzProg/acouz/releases/latest/download/AcouZSetup.exe">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -99,7 +96,7 @@
         </svg>
         <span data-i18n="hero.cta.download">Download for free</span>
       </a>
-      <a class="btn btn-ghost btn-hero" href="https://github.com/DoodzProg/voxflow">
+      <a class="btn btn-ghost btn-hero" href="https://github.com/DoodzProg/acouz">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483
                    0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466
@@ -131,11 +128,11 @@
         <div class="demo-dot" style="background:#EF4444;"></div>
         <div class="demo-dot" style="background:#F59E0B;"></div>
         <div class="demo-dot" style="background:#10B981;"></div>
-        <span style="margin-left:8px;font-size:12px;color:var(--text-3);" data-i18n="demo.title">Voxflow 1.0.1</span>
+        <span style="margin-left:8px;font-size:12px;color:var(--text-3);" data-i18n="demo.title">AcouZ 1.0.2</span>
       </div>
 
       <div class="demo-body">
-        <img src="assets/demo.gif" alt="Voxflow app walkthrough" />
+        <img src="assets/demo.gif" alt="AcouZ app walkthrough" />
       </div>
 
     </div>
@@ -160,7 +157,7 @@
         <span style="margin-left:8px;font-size:12px;color:var(--text-3);" data-i18n="example.titlebar">Live dictation</span>
       </div>
       <div class="demo-body demo-body--wide">
-        <img src="assets/example.gif" alt="Voxflow live dictation with hotkeys" />
+        <img src="assets/example.gif" alt="AcouZ live dictation with hotkeys" />
       </div>
     </div>
   </div>
@@ -178,19 +175,19 @@
     </div>
     <div class="screenshot-grid">
       <div class="screenshot-item reveal">
-        <img src="assets/screenshot-home.png" alt="Voxflow dashboard" loading="lazy" />
+        <img src="assets/screenshot-home.png" alt="AcouZ dashboard" loading="lazy" />
         <div class="screenshot-caption" data-i18n="screenshots.cap1">Dashboard — stats &amp; shortcuts</div>
       </div>
       <div class="screenshot-item reveal">
-        <img src="assets/screenshot-settings.png" alt="Voxflow settings" loading="lazy" />
+        <img src="assets/screenshot-settings.png" alt="AcouZ settings" loading="lazy" />
         <div class="screenshot-caption" data-i18n="screenshots.cap2">Settings — hotkeys &amp; language</div>
       </div>
       <div class="screenshot-item reveal">
-        <img src="assets/screenshot-audio.png" alt="Voxflow audio page" loading="lazy" />
+        <img src="assets/screenshot-audio.png" alt="AcouZ audio page" loading="lazy" />
         <div class="screenshot-caption" data-i18n="screenshots.cap3">Audio — microphone &amp; VU meter</div>
       </div>
       <div class="screenshot-item reveal">
-        <img src="assets/screenshot-overlay.png" alt="Voxflow overlay" loading="lazy" />
+        <img src="assets/screenshot-overlay.png" alt="AcouZ overlay" loading="lazy" />
         <div class="screenshot-caption" data-i18n="screenshots.cap4">Overlay — floating recording bubble</div>
       </div>
     </div>
@@ -380,7 +377,7 @@
       <p data-i18n="oss.body">No subscription, no telemetry, no accounts.
          Your API key stays on your machine. Audit every line of code.</p>
       <div class="oss-actions">
-        <a class="btn btn-ghost" href="https://github.com/DoodzProg/voxflow">
+        <a class="btn btn-ghost" href="https://github.com/DoodzProg/acouz">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483
                      0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466
@@ -394,11 +391,11 @@
           <span data-i18n="oss.star">Star on GitHub</span>
         </a>
         <a class="btn btn-ghost"
-           href="https://github.com/DoodzProg/voxflow/issues/new?template=bug_report.md">
+           href="https://github.com/DoodzProg/acouz/issues/new?template=bug_report.md">
           <span data-i18n="oss.bug">Report a bug</span>
         </a>
         <a class="btn btn-ghost"
-           href="https://github.com/DoodzProg/voxflow/blob/main/CONTRIBUTING.md">
+           href="https://github.com/DoodzProg/acouz/blob/main/CONTRIBUTING.md">
           <span data-i18n="oss.contribute">Contribute</span>
         </a>
       </div>
@@ -416,21 +413,21 @@
       <h2 id="download-title" data-i18n="dl.title">Ready to stop typing?</h2>
       <p data-i18n="dl.body">Free download. No account. No subscription. Just your voice.</p>
       <a class="btn btn-primary btn-download"
-         href="https://github.com/DoodzProg/voxflow/releases/latest/download/VoxflowSetup.exe">
+         href="https://github.com/DoodzProg/acouz/releases/latest/download/AcouZSetup.exe">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        <span data-i18n="dl.btn">Download Voxflow for Windows</span>
+        <span data-i18n="dl.btn">Download AcouZ for Windows</span>
       </a>
       <p class="platform-badge">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0
                    20.699M10.949 12.6H24V24l-12.9-1.801"/>
         </svg>
-        <span data-i18n="dl.badge">Windows 10 / 11 (x64) &middot; v1.0.1</span>
+        <span data-i18n="dl.badge">Windows 10 / 11 (x64) &middot; v1.0.2</span>
       </p>
     </div>
   </div>
@@ -444,29 +441,26 @@
   <div class="container footer-inner">
 
     <div class="footer-logo">
-      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <linearGradient id="logo-footer" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%"   stop-color="#7C6FEB"/>
-            <stop offset="100%" stop-color="#5B4FCF"/>
+          <linearGradient id="bgL" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"   stop-color="#1E2822"/>
+            <stop offset="100%" stop-color="#121814"/>
           </linearGradient>
         </defs>
-        <rect width="200" height="200" rx="44" fill="url(#logo-footer)"/>
-        <path d="M 34 52 L 100 158 L 166 52" stroke="white" stroke-width="22"
-              stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <rect x="23" y="40" width="154" height="20" rx="10" fill="white"/>
-        <line x1="61"  y1="82"  x2="139" y2="82"  stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
-        <line x1="72"  y1="104" x2="128" y2="104" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
-        <line x1="84"  y1="126" x2="116" y2="126" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+        <rect width="200" height="200" rx="44" fill="url(#bgL)"/>
+        <line x1="40" y1="164" x2="100" y2="36" stroke="white" stroke-width="20"  stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="100" y1="36" x2="160" y2="164" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="64,120 86,110 114,130 136,120" fill="none" stroke="#1DB954" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      Voxflow
+      AcouZ
     </div>
 
     <nav class="footer-links" aria-label="Footer navigation">
-      <a href="https://github.com/DoodzProg/voxflow">GitHub</a>
-      <a href="https://github.com/DoodzProg/voxflow/releases" data-i18n="footer.releases">Releases</a>
-      <a href="https://github.com/DoodzProg/voxflow/blob/main/LICENSE" data-i18n="footer.license">MIT License</a>
-      <a href="https://github.com/DoodzProg/voxflow/issues" data-i18n="footer.support">Support</a>
+      <a href="https://github.com/DoodzProg/acouz">GitHub</a>
+      <a href="https://github.com/DoodzProg/acouz/releases" data-i18n="footer.releases">Releases</a>
+      <a href="https://github.com/DoodzProg/acouz/blob/main/LICENSE" data-i18n="footer.license">MIT License</a>
+      <a href="https://github.com/DoodzProg/acouz/issues" data-i18n="footer.support">Support</a>
     </nav>
 
     <span class="footer-copy" data-i18n="footer.copy">&copy; 2026 DoodzProg &middot; MIT License</span>
