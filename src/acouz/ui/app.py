@@ -37,7 +37,12 @@ from PySide6.QtSvgWidgets import QSvgWidget
 from acouz.utils.config import ConfigManager
 from acouz.core.engine import DictationEngine
 from acouz.core.hotkey import HotkeyListener
-from acouz.platform import apply_dwm_rounded_corners, capture_selected_text, send_paste
+from acouz.platform import (
+    apply_dwm_rounded_corners,
+    capture_selected_text,
+    send_paste,
+    get_foreground_window,
+)
 
 import acouz.ui.styles as S
 from acouz.ui.styles import ICONS, Theme, DARK, LOGO_SVG
@@ -319,6 +324,7 @@ class AcouZApp(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         self._is_dictating: bool = False
+        self._target_wid: int = 0   # XID of the window to paste into (Linux)
         self.record_start_time: float = 0.0
         self.history_data: list[dict] = []
         self.history_file: str = os.path.join(
@@ -639,9 +645,15 @@ class AcouZApp(QMainWindow):
     # ------------------------------------------------------------------
 
     def start_dictation(self) -> None:
-        """Begin a simple (no-context) dictation session."""
+        """Begin a simple (no-context) dictation session.
+
+        Captures the foreground window XID before the overlay appears so that
+        ``send_paste`` can target the correct window on Linux even after the
+        overlay steals focus.
+        """
         if self._is_dictating:
             return
+        self._target_wid = get_foreground_window()
         self._is_dictating = True
         self.record_start_time = time.time()
         self.play_beep(start=True)
@@ -662,6 +674,7 @@ class AcouZApp(QMainWindow):
         """
         if self._is_dictating:
             return
+        self._target_wid = previous_hwnd
         self._is_dictating = True
         self.record_start_time = time.time()
         self.play_beep(start=True)
@@ -793,7 +806,7 @@ class AcouZApp(QMainWindow):
         clipboard.setText(text)
 
         def _paste_and_restore() -> None:
-            send_paste()
+            send_paste(self._target_wid)
             QTimer.singleShot(250, lambda: clipboard.setMimeData(backup_mime))
 
         QTimer.singleShot(50, _paste_and_restore)

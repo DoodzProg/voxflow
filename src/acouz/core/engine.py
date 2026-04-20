@@ -77,11 +77,48 @@ class DictationEngine(QThread):
         """
         self.current_context = text
 
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _negotiate_sample_rate(self, device_id: Optional[int]) -> int:
+        """Return the best sample rate the device accepts, in preference order.
+
+        Tries 16 000 Hz first (optimal for Whisper), then common ALSA rates.
+        Falls back to the device's own default if none of the candidates work.
+
+        Args:
+            device_id: PortAudio device index, or ``None`` for system default.
+
+        Returns:
+            Supported integer sample rate in Hz.
+        """
+        for rate in (16_000, 44_100, 48_000, 22_050, 8_000):
+            try:
+                sd.check_input_settings(
+                    device=device_id,
+                    samplerate=rate,
+                    channels=1,
+                    dtype="int16",
+                )
+                return rate
+            except Exception:
+                continue
+        # Last resort: ask PortAudio what the device reports as default.
+        try:
+            query_id = device_id if device_id is not None else sd.default.device[0]
+            info = sd.query_devices(query_id, "input")
+            return int(info["default_samplerate"])
+        except Exception:
+            return 44_100
+
     def start_recording(self) -> None:
         """Open a ``sounddevice.InputStream`` and begin buffering audio.
 
         Reads the ``MICROPHONE`` config key to select the desired device.
         Falls back to the system default if the saved device is not found.
+        Negotiates the sample rate automatically so ALSA devices that do not
+        support 16 000 Hz are handled without raising ``paInvalidSampleRate``.
 
         Raises:
             sounddevice.PortAudioError: If the audio device cannot be opened
@@ -101,8 +138,11 @@ class DictationEngine(QThread):
                     device_id = i
                     break
 
+        negotiated_rate = self._negotiate_sample_rate(device_id)
+        self.sample_rate = negotiated_rate
+
         self._stream = sd.InputStream(
-            samplerate=self.sample_rate,
+            samplerate=negotiated_rate,
             channels=1,
             dtype="int16",
             device=device_id,

@@ -19,7 +19,7 @@ set_startup(enabled)              -- add / remove autostart entry
 start_window_drag(hwnd)           -- native frameless-window drag
 read_hotkey()                     -- blocking hotkey capture for rebinding UI
 is_key_pressed(key)               -- check if a key is currently held down
-send_paste()                      -- inject Ctrl+V into the focused window
+send_paste(target_wid=0)          -- inject Ctrl+V into the target window (XID on Linux)
 """
 
 import sys

@@ -281,8 +281,13 @@ def is_key_pressed(key: str) -> bool:
 # Text injection
 # ---------------------------------------------------------------------------
 
-def send_paste() -> None:
-    """Send ``Ctrl+V`` via the keyboard library to paste clipboard contents."""
+def send_paste(target_wid: int = 0) -> None:
+    """Send ``Ctrl+V`` via the keyboard library to paste clipboard contents.
+
+    Args:
+        target_wid: Unused on Windows — the keyboard library injects at the OS
+                    level and the correct window already has focus at call time.
+    """
     import keyboard  # noqa: PLC0415
     try:
         keyboard.send("ctrl+v")

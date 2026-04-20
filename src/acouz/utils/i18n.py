@@ -85,8 +85,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     "general.section.behaviour":   {"en": "Behaviour",          "fr": "Comportement"},
     "general.startup.label":       {"en": "Launch at startup",   "fr": "Démarrage automatique"},
     "general.startup.desc":        {
-        "en": "Start AcouZ when Windows starts",
-        "fr": "Lancer AcouZ au démarrage de Windows",
+        "en": "Start AcouZ automatically with the system",
+        "fr": "Lancer AcouZ automatiquement au démarrage du système",
     },
     "general.sound.label":         {"en": "Confirmation sound",  "fr": "Son de confirmation"},
     "general.sound.desc":          {
