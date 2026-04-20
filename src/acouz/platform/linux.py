@@ -94,11 +94,17 @@ def _build_evdev_map() -> None:
 def _evdev_key_to_std(keycode: int) -> str:
     """Convert an evdev key code to a keyboard-library-compatible string.
 
+    First checks the explicit ``_EVDEV_TO_STD`` map (modifier keys).  For
+    unmapped keys, derives the name from the ``ecodes.KEY`` dictionary and
+    strips any ``"left"`` / ``"right"`` prefix so that, e.g., both
+    ``KEY_RIGHTCTRL`` and ``KEY_LEFTCTRL`` normalise to ``"ctrl"``.
+
     Args:
-        keycode: Raw evdev ``EV_KEY`` code.
+        keycode: Raw evdev ``EV_KEY`` scan code.
 
     Returns:
-        Normalised lowercase key name, e.g. ``"ctrl"``, ``"shift"``, ``"a"``.
+        Normalised lowercase key name compatible with keyboard-library format,
+        e.g. ``"ctrl"``, ``"shift"``, ``"a"``, ``"f1"``.
     """
     if keycode in _EVDEV_TO_STD:
         return _EVDEV_TO_STD[keycode]
@@ -108,7 +114,13 @@ def _evdev_key_to_std(keycode: int) -> str:
         if isinstance(name, list):
             name = name[0] if name else ""
         if isinstance(name, str) and name.startswith("KEY_"):
-            return name[4:].lower()  # KEY_A → "a", KEY_F1 → "f1"
+            ch = name[4:].lower()  # strip "KEY_" prefix
+            # Strip directional prefix ("left"/"right") so KEY_RIGHTCTRL → "ctrl"
+            for prefix in ("right", "left"):
+                if ch.startswith(prefix) and len(ch) > len(prefix):
+                    ch = ch[len(prefix):]
+                    break
+            return ch
     except Exception:
         pass
     return f"key_{keycode}"
@@ -166,27 +178,34 @@ def _find_keyboard_devices() -> list:
 def _evdev_read_loop(dev) -> None:
     """Blocking read loop for a single evdev ``InputDevice``.
 
-    Runs in a daemon thread.  Updates ``_pressed_keys`` on every key-down and
-    key-up event.  Exits silently on any I/O error (e.g. device removed).
+    Runs in a daemon thread.  Reads raw ``InputEvent`` objects directly —
+    no ``categorize()`` call — to avoid version-dependent API differences.
+
+    Event values:
+        ``1`` = key down, ``0`` = key up, ``2`` = key hold (ignored, already
+        in ``_pressed_keys`` from the key-down event).
 
     Args:
         dev: ``evdev.InputDevice`` to monitor.
     """
     try:
-        from evdev import categorize, ecodes  # noqa: PLC0415
+        from evdev import ecodes  # noqa: PLC0415
+        EV_KEY = ecodes.EV_KEY
         for event in dev.read_loop():
-            if event.type != ecodes.EV_KEY:
+            if event.type != EV_KEY:
                 continue
-            ke = categorize(event)
-            name = _evdev_key_to_std(ke.scancode)
-            if ke.keystate in (ke.key_down, ke.key_hold):
+            name = _evdev_key_to_std(event.code)
+            if event.value == 1:        # key down
                 with _pressed_lock:
                     _pressed_keys.add(name)
-            elif ke.keystate == ke.key_up:
+            elif event.value == 0:      # key up
                 with _pressed_lock:
                     _pressed_keys.discard(name)
-    except (OSError, IOError, AttributeError):
-        pass
+            # event.value == 2 (key hold) requires no action
+    except (OSError, IOError):
+        pass  # Device removed or disconnected — exit thread silently.
+    except Exception as exc:
+        print(f"[platform.linux] evdev read loop error on {dev.path}: {exc}")
 
 
 # ---------------------------------------------------------------------------

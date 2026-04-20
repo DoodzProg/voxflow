@@ -77,48 +77,19 @@ class DictationEngine(QThread):
         """
         self.current_context = text
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
-    def _negotiate_sample_rate(self, device_id: Optional[int]) -> int:
-        """Return the best sample rate the device accepts, in preference order.
-
-        Tries 16 000 Hz first (optimal for Whisper), then common ALSA rates.
-        Falls back to the device's own default if none of the candidates work.
-
-        Args:
-            device_id: PortAudio device index, or ``None`` for system default.
-
-        Returns:
-            Supported integer sample rate in Hz.
-        """
-        for rate in (16_000, 44_100, 48_000, 22_050, 8_000):
-            try:
-                sd.check_input_settings(
-                    device=device_id,
-                    samplerate=rate,
-                    channels=1,
-                    dtype="int16",
-                )
-                return rate
-            except Exception:
-                continue
-        # Last resort: ask PortAudio what the device reports as default.
-        try:
-            query_id = device_id if device_id is not None else sd.default.device[0]
-            info = sd.query_devices(query_id, "input")
-            return int(info["default_samplerate"])
-        except Exception:
-            return 44_100
-
     def start_recording(self) -> None:
         """Open a ``sounddevice.InputStream`` and begin buffering audio.
 
         Reads the ``MICROPHONE`` config key to select the desired device.
         Falls back to the system default if the saved device is not found.
-        Negotiates the sample rate automatically so ALSA devices that do not
-        support 16 000 Hz are handled without raising ``paInvalidSampleRate``.
+
+        The stream is opened without an explicit ``samplerate`` so that
+        PortAudio / PulseAudio / ALSA chooses the device's native rate.
+        The actual rate is read back from ``stream.samplerate`` immediately
+        after construction and stored in :attr:`sample_rate` so that the WAV
+        header written in :meth:`run` always matches the captured audio.
+        This avoids ``paInvalidSampleRate`` errors on Linux where many ALSA
+        devices do not support 16 000 Hz.
 
         Raises:
             sounddevice.PortAudioError: If the audio device cannot be opened
@@ -138,16 +109,16 @@ class DictationEngine(QThread):
                     device_id = i
                     break
 
-        negotiated_rate = self._negotiate_sample_rate(device_id)
-        self.sample_rate = negotiated_rate
-
+        # samplerate=None → PortAudio selects the device's native rate.
+        # Read the actual value back before start() so the WAV header is correct.
         self._stream = sd.InputStream(
-            samplerate=negotiated_rate,
+            samplerate=None,
             channels=1,
             dtype="int16",
             device=device_id,
             callback=self._audio_callback,
         )
+        self.sample_rate = int(self._stream.samplerate)
         self._stream.start()
         self.status_changed.emit(tr("engine.recording"))
 

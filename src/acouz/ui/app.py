@@ -30,8 +30,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QPushButton, QLabel, QStackedWidget,
     QFrame, QSystemTrayIcon, QMenu, QMessageBox,
 )
-from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QPixmap
-from PySide6.QtCore import Qt, QTimer, Signal, QByteArray
+from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QPixmap, QCursor
+from PySide6.QtCore import Qt, QTimer, Signal, QByteArray, QEvent
 from PySide6.QtSvgWidgets import QSvgWidget
 
 from acouz.utils.config import ConfigManager
@@ -324,7 +324,9 @@ class AcouZApp(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         self._is_dictating: bool = False
-        self._target_wid: int = 0   # XID of the window to paste into (Linux)
+        self._target_wid: int = 0      # XID of the window to paste into (Linux)
+        self._linux_resize: bool = sys.platform != "win32"
+        self._resize_cursor_active: bool = False
         self.record_start_time: float = 0.0
         self.history_data: list[dict] = []
         self.history_file: str = os.path.join(
@@ -344,6 +346,11 @@ class AcouZApp(QMainWindow):
         # A zero-delay timer ensures this runs after the first paint event,
         # which is when the handle is guaranteed to be created.
         QTimer.singleShot(0, self._apply_dwm_rounded_corners)
+
+        # Install an application-level event filter on Linux to intercept
+        # mouse events from all child widgets for border-resize detection.
+        if self._linux_resize:
+            QApplication.instance().installEventFilter(self)
 
     # ------------------------------------------------------------------
     # UI Construction
@@ -381,6 +388,120 @@ class AcouZApp(QMainWindow):
         if sys.platform != "win32":
             self._apply_linux_mask()
         super().resizeEvent(event)
+
+    # ------------------------------------------------------------------
+    # Linux border resize — event filter + QWindow.startSystemResize
+    # ------------------------------------------------------------------
+
+    def _get_resize_edges(self, local_pos) -> "Qt.Edges":
+        """Return the ``Qt.Edges`` bitmask for a cursor position near a border.
+
+        Args:
+            local_pos: Cursor position in window-local coordinates.
+
+        Returns:
+            ``Qt.Edges`` flags for the active resize direction(s), or an empty
+            flags value when the cursor is not within ``_BORDER`` pixels of
+            any window edge.
+        """
+        x, y = local_pos.x(), local_pos.y()
+        w, h = self.width(), self.height()
+        b = self._BORDER
+        edges = Qt.Edges(0)
+        if 0 <= x < b:        edges |= Qt.Edge.LeftEdge
+        if w - b <= x <= w:   edges |= Qt.Edge.RightEdge
+        if 0 <= y < b:        edges |= Qt.Edge.TopEdge
+        if h - b <= y <= h:   edges |= Qt.Edge.BottomEdge
+        return edges
+
+    def _update_resize_cursor(self) -> None:
+        """Set or restore the window cursor based on border proximity.
+
+        Uses ``QApplication.setOverrideCursor`` / ``changeOverrideCursor`` so
+        the cursor change applies even when the pointer is over a child widget
+        that has its own cursor.
+        """
+        local = self.mapFromGlobal(QCursor.pos())
+        edges = self._get_resize_edges(local)
+
+        left   = bool(edges & Qt.Edge.LeftEdge)
+        right  = bool(edges & Qt.Edge.RightEdge)
+        top    = bool(edges & Qt.Edge.TopEdge)
+        bottom = bool(edges & Qt.Edge.BottomEdge)
+
+        if (left and top) or (right and bottom):
+            shape = Qt.CursorShape.SizeFDiagCursor
+        elif (right and top) or (left and bottom):
+            shape = Qt.CursorShape.SizeBDiagCursor
+        elif left or right:
+            shape = Qt.CursorShape.SizeHorCursor
+        elif top or bottom:
+            shape = Qt.CursorShape.SizeVerCursor
+        else:
+            shape = None
+
+        if shape is not None:
+            cursor = QCursor(shape)
+            if not self._resize_cursor_active:
+                QApplication.setOverrideCursor(cursor)
+                self._resize_cursor_active = True
+            else:
+                QApplication.changeOverrideCursor(cursor)
+        else:
+            self._clear_resize_cursor()
+
+    def _clear_resize_cursor(self) -> None:
+        """Restore the default cursor if a resize-direction override is active."""
+        if self._resize_cursor_active:
+            QApplication.restoreOverrideCursor()
+            self._resize_cursor_active = False
+
+    def eventFilter(self, obj: object, event: object) -> bool:  # type: ignore[override]
+        """Intercept mouse events to provide border resize on Linux.
+
+        Installed on ``QApplication`` (not just ``self``) so that events from
+        all child widgets are visible.  Ignored on Windows — native
+        ``WM_NCHITTEST`` handles resize there.
+
+        Strategy:
+          - ``MouseMove``        → update the cursor shape near borders.
+          - ``MouseButtonPress`` → call ``QWindow.startSystemResize()`` on the
+                                   underlying ``QWindow`` handle, which sends
+                                   ``_NET_WM_MOVERESIZE`` on X11/XWayland and
+                                   the Wayland ``xdg_toplevel.resize`` request
+                                   on Wayland-native compositors.
+          - ``Leave``            → restore the default cursor.
+
+        Args:
+            obj:   Object that received the event (any widget in the app).
+            event: The event to inspect.
+
+        Returns:
+            ``True`` to consume the event (when handing off to system resize),
+            ``False`` to let it propagate normally.
+        """
+        if not self._linux_resize:
+            return False
+
+        etype = event.type()  # type: ignore[attr-defined]
+
+        if etype == QEvent.Type.MouseMove:
+            self._update_resize_cursor()
+
+        elif etype == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.LeftButton:  # type: ignore[attr-defined]
+                local = self.mapFromGlobal(QCursor.pos())
+                edges = self._get_resize_edges(local)
+                if edges:
+                    handle = self.windowHandle()
+                    if handle and handle.startSystemResize(edges):
+                        self._clear_resize_cursor()
+                        return True  # Consume — don't let TitleBar also start a drag.
+
+        elif etype == QEvent.Type.Leave:
+            self._clear_resize_cursor()
+
+        return False
 
     def _build_tray(self) -> None:
         """Create and show the system tray icon with its context menu."""

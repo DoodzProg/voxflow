@@ -54,6 +54,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - All call sites updated to import from `acouz.platform` instead of inline `ctypes` / `winreg`:
   `main.py`, `core/hotkey.py`, `ui/app.py`, `ui/components.py`, `ui/pages/general.py`.
 
+### Fixed
+
+#### Phase 2 Bug Fixes
+- **evdev key mapping** (`src/acouz/platform/linux.py`): `_evdev_read_loop` now reads
+  `event.code` and `event.value` directly instead of relying on `categorize()` / `scancode`,
+  which produced inconsistent results across `python-evdev` versions.  `_evdev_key_to_std`
+  strips any `"left"` / `"right"` directional prefix from the fallback path so that, e.g.,
+  `KEY_RIGHTCTRL` normalises to `"ctrl"` — matching the canonical names expected by
+  `HotkeyListener`.
+- **ALSA sample rate** (`src/acouz/core/engine.py`): removed `_negotiate_sample_rate()`;
+  `sd.InputStream` is now opened with `samplerate=None` so PortAudio / ALSA selects the
+  device's native rate automatically.  The actual rate is read back from
+  `stream.samplerate` immediately after construction so the WAV header written in `run()`
+  always matches the captured audio.  Eliminates `paInvalidSampleRate` on ALSA devices
+  that do not support 16 000 Hz natively.
+- **Linux frameless window resize** (`src/acouz/ui/app.py`): added `eventFilter`,
+  `_get_resize_edges`, `_update_resize_cursor` and `_clear_resize_cursor` — an app-level
+  `QApplication.installEventFilter` intercepts mouse events, shows the appropriate resize
+  cursor near the window border, and delegates to `QWindow.startSystemResize(Qt.Edges)` for
+  native X11 / XCB resize handling.  Replaces the Windows-only `WM_NCHITTEST`
+  `nativeEvent` path.
+
 ### Changed
 - Windows behaviour is **identical** to v1.0.2 — no functional regression.
 - Linux boot: application launches and renders the UI; hotkeys, context capture and autostart
