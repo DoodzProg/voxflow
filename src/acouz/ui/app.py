@@ -37,6 +37,7 @@ from PySide6.QtSvgWidgets import QSvgWidget
 from acouz.utils.config import ConfigManager
 from acouz.core.engine import DictationEngine
 from acouz.core.hotkey import HotkeyListener
+from acouz.platform import apply_dwm_rounded_corners, capture_selected_text
 
 import acouz.ui.styles as S
 from acouz.ui.styles import ICONS, Theme, DARK, LOGO_SVG
@@ -343,28 +344,7 @@ class AcouZApp(QMainWindow):
     # ------------------------------------------------------------------
 
     def _apply_dwm_rounded_corners(self) -> None:
-        """Request Windows 11 DWM rounded corners via ``DwmSetWindowAttribute``.
-
-        Uses ``DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND`` (attribute 33,
-        value 2).  Silently ignored on Windows 10 and non-Windows platforms.
-        Works regardless of whether the app was launched via ``main.py`` or
-        directly via ``python src/acouz/ui/app.py``.
-        """
-        import sys as _sys  # noqa: PLC0415
-        if _sys.platform != "win32":
-            return
-        try:
-            import ctypes  # noqa: PLC0415
-            DWMWA_WINDOW_CORNER_PREFERENCE = 33
-            preference = ctypes.c_int(2)  # DWMWCP_ROUND
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                int(self.winId()),
-                DWMWA_WINDOW_CORNER_PREFERENCE,
-                ctypes.byref(preference),
-                ctypes.sizeof(preference),
-            )
-        except Exception:
-            pass  # Non-fatal — Windows 10 / older builds ignore this.
+        apply_dwm_rounded_corners(int(self.winId()))
 
     def _build_tray(self) -> None:
         """Create and show the system tray icon with its context menu."""
@@ -664,83 +644,7 @@ class AcouZApp(QMainWindow):
             backup_mime.setData(fmt, original_mime.data(fmt))
 
         def _extract() -> None:
-            import ctypes  # noqa: PLC0415
-            import keyboard  # noqa: PLC0415
-            import time as _time  # noqa: PLC0415
-
-            context_text = ""
-
-            # Plan A: UIAutomation (works with Notepad, Word, etc.)
-            try:
-                import uiautomation as auto  # noqa: PLC0415
-                auto.SetGlobalSearchTimeout(0.1)
-                control = auto.GetFocusedControl()
-                if control:
-                    pattern = control.GetTextPattern()
-                    if pattern:
-                        selections = pattern.GetSelection()
-                        if selections and len(selections) > 0:
-                            context_text = selections[0].GetText()
-            except Exception:
-                pass
-
-            # Plan B: Chromium fallback via raw SendInput scancodes
-            if not context_text:
-                try:
-                    keyboard.block_key(";")
-                    keyboard.block_key(":")
-                except Exception:
-                    pass
-                clipboard.clear()
-                try:
-                    import ctypes  # noqa: F811
-                    INPUT_KEYBOARD = 1
-                    KEYEVENTF_SCANCODE = 0x0008
-                    KEYEVENTF_KEYUP = 0x0002
-
-                    class KEYBDINPUT(ctypes.Structure):  # noqa: N801
-                        _fields_ = [
-                            ("wVk", ctypes.c_ushort),
-                            ("wScan", ctypes.c_ushort),
-                            ("dwFlags", ctypes.c_ulong),
-                            ("time", ctypes.c_ulong),
-                            ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
-                        ]
-
-                    class INPUT(ctypes.Structure):  # noqa: N801
-                        class _INPUT(ctypes.Union):
-                            _fields_ = [("ki", KEYBDINPUT)]
-                        _anonymous_ = ("_input",)
-                        _fields_ = [
-                            ("type", ctypes.c_ulong),
-                            ("_input", _INPUT),
-                        ]
-
-                    def _send(scancode: int, release: bool = False) -> None:
-                        flags = KEYEVENTF_SCANCODE | (KEYEVENTF_KEYUP if release else 0)
-                        ii_ = INPUT._INPUT()
-                        ii_.ki = KEYBDINPUT(
-                            0, scancode, flags, 0,
-                            ctypes.pointer(ctypes.c_ulong(0)),
-                        )
-                        x = INPUT(INPUT_KEYBOARD, ii_)
-                        ctypes.windll.user32.SendInput(
-                            1, ctypes.byref(x), ctypes.sizeof(x)
-                        )
-
-                    _send(0x1D)        # Ctrl down
-                    _send(0x2E)        # C down
-                    _send(0x2E, True)  # C up
-                    _send(0x1D, True)  # Ctrl up
-                    _time.sleep(0.15)
-                    context_text = clipboard.text()
-                finally:
-                    try:
-                        keyboard.unblock_key(";")
-                        keyboard.unblock_key(":")
-                    except Exception:
-                        pass
-
+            context_text = capture_selected_text(clipboard)
             clipboard.setMimeData(backup_mime)
             context_text = context_text.strip()
             self.engine.set_context(context_text)

@@ -6,6 +6,63 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased] — Linux Port (branch: `feature/linux-port`)
+
+### Added
+
+#### Platform Abstraction Layer (Phase 0)
+- New `src/acouz/platform/` package providing a unified, OS-agnostic API
+  for all system-level operations previously scattered across Windows-only call sites.
+- `src/acouz/platform/__init__.py` — runtime dispatcher: imports the correct backend
+  (`windows` or `linux`) based on `sys.platform` at import time; zero overhead at runtime.
+- `src/acouz/platform/windows.py` — full Win32 implementations migrated from inline code:
+  - `apply_dwm_rounded_corners(hwnd)` — DWM `DWMWA_WINDOW_CORNER_PREFERENCE` (Windows 11)
+  - `set_app_user_model_id()` — `SetCurrentProcessExplicitAppUserModelID` via `shell32`
+  - `get_foreground_window()` — `user32.GetForegroundWindow()`
+  - `capture_selected_text(clipboard)` — UIAutomation Plan A + raw `SendInput` Ctrl+C fallback
+  - `is_startup_enabled()` / `set_startup(enabled)` — `HKCU\...\Run` registry key
+  - `start_window_drag(hwnd)` — `WM_NCLBUTTONDOWN / HTCAPTION`
+  - `read_hotkey()` — `keyboard.read_hotkey(suppress=False)`
+- `src/acouz/platform/linux.py` — safe no-op / zero-value stubs for every function above;
+  application imports and runs on Linux without crashing (Phase 2 implementations pending).
+- All call sites updated to import from `acouz.platform` instead of inline `ctypes` / `winreg`:
+  `main.py`, `core/hotkey.py`, `ui/app.py`, `ui/components.py`, `ui/pages/general.py`.
+
+### Changed
+- Windows behaviour is **identical** to v1.0.2 — no functional regression.
+- Linux boot: application launches and renders the UI; hotkeys, context capture and autostart
+  are stubs that will be replaced in Phase 2 (`pynput`, `xdotool`, `xclip`) and Phase 3
+  (`~/.config/autostart`).
+
+---
+
+## [1.0.2] — 2026-04-16
+
+### Added
+- Rebranding to **AcouZ** — new name, updated logo and updated GitHub Pages website.
+- Dark green accent throughout the UI (`#22C55E` / `#16A34A`) replacing the previous teal.
+- Updated website with EN/FR landing pages reflecting the new branding.
+
+### Changed
+- `LOGO_SVG` updated to the new AcouZ V-as-microphone mark with green gradient.
+- Sidebar version badge updated to `v1.0.2`.
+
+---
+
+## [1.0.1] — 2026-04-12
+
+### Added
+- **VU meter** on the `VoiceOverlay` — animated five-bar visualiser driven by real-time
+  microphone RMS; smooth low-pass filter at 30 fps.
+- Confirmation overlay now shows a ✓ confirm button and ✕ cancel button.
+- Website updated with EN/FR pages.
+
+### Fixed
+- Several i18n key mismatches in `pages/general.py` and `utils/i18n.py`.
+- LLM system prompt tightened to reduce hallucination on short utterances.
+
+---
+
 ## [1.0.0] — 2026-04-08
 
 ### Added

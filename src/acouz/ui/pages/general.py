@@ -14,7 +14,6 @@ language/region preferences (UI language + dictation language).
 
 from __future__ import annotations
 
-import sys
 from typing import Optional
 
 from PySide6.QtWidgets import (
@@ -31,69 +30,7 @@ from acouz.ui.components import (
 from acouz.ui.pages.base import BasePage
 from acouz.utils.config import ConfigManager
 from acouz.utils.i18n import tr
-
-
-# ---------------------------------------------------------------------------
-# Windows startup registry helpers
-# ---------------------------------------------------------------------------
-
-_APP_NAME = "AcouZ"
-
-
-def _startup_cmd() -> str:
-    """Return the command string to register in the Run key.
-
-    Returns:
-        Quoted executable path; uses ``-m acouz.ui.app`` when running as a
-        plain Python interpreter (development mode).
-    """
-    if getattr(sys, "frozen", False):
-        return f'"{sys.executable}"'
-    return f'"{sys.executable}" -m acouz.ui.app'
-
-
-def _is_startup_enabled() -> bool:
-    """Check whether AcouZ is registered to run at Windows startup.
-
-    Returns:
-        ``True`` if the registry value exists under
-        ``HKCU\\...\\CurrentVersion\\Run``.
-    """
-    try:
-        import winreg  # noqa: PLC0415
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-        )
-        winreg.QueryValueEx(key, _APP_NAME)
-        winreg.CloseKey(key)
-        return True
-    except (FileNotFoundError, OSError):
-        return False
-
-
-def _set_startup(enabled: bool) -> None:
-    """Add or remove the AcouZ startup registry entry.
-
-    Args:
-        enabled: ``True`` to add the entry, ``False`` to remove it.
-    """
-    import winreg  # noqa: PLC0415
-
-    key = winreg.OpenKey(
-        winreg.HKEY_CURRENT_USER,
-        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-        0,
-        winreg.KEY_SET_VALUE,
-    )
-    if enabled:
-        winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, _startup_cmd())
-    else:
-        try:
-            winreg.DeleteValue(key, _APP_NAME)
-        except FileNotFoundError:
-            pass
-    winreg.CloseKey(key)
+from acouz.platform import is_startup_enabled, set_startup
 
 
 # ---------------------------------------------------------------------------
@@ -232,8 +169,8 @@ class GeneralPage(BasePage):
         root.addWidget(self._sec_behaviour)
         self._beh_card = SettingCard()
 
-        self._startup_switch = ToggleSwitch(_is_startup_enabled())
-        self._startup_switch.toggled.connect(_set_startup)
+        self._startup_switch = ToggleSwitch(is_startup_enabled())
+        self._startup_switch.toggled.connect(set_startup)
         self._beh_card.add(
             tr("general.startup.label"),
             tr("general.startup.desc"),

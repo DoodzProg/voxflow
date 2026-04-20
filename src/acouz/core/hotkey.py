@@ -25,7 +25,6 @@ Both hotkeys support two trigger modes stored in
 
 from __future__ import annotations
 
-import ctypes
 import time
 from typing import Optional
 
@@ -33,6 +32,7 @@ import keyboard
 from PySide6.QtCore import QThread, Signal
 
 from acouz.utils.config import ConfigManager
+from acouz.platform import get_foreground_window
 
 
 class HotkeyListener(QThread):
@@ -110,7 +110,7 @@ class HotkeyListener(QThread):
 
                 # Capture foreground HWND only when no hotkey is active
                 if not d_pressed and not c_pressed:
-                    hwnd = ctypes.windll.user32.GetForegroundWindow()
+                    hwnd = get_foreground_window()
                     if hwnd:
                         last_hwnd = hwnd
 

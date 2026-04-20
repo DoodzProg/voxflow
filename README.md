@@ -1,6 +1,6 @@
 # AcouZ
 
-**Open-source AI-powered voice dictation for Windows.**  
+**Open-source AI-powered voice dictation — Windows (stable) · Linux/Ubuntu (in progress).**  
 Hold a hotkey, speak, release — your words appear instantly in any application.
 
 <p align="center">
@@ -58,7 +58,11 @@ No subscription, no cloud account beyond a free Groq API key, no data retained o
 ## Architecture
 
 ```
-src/AcouZ/
+src/acouz/
+├── platform/
+│   ├── __init__.py      # OS dispatcher — imports windows or linux backend at runtime
+│   ├── windows.py       # Win32 implementations (DWM, user32, winreg, keyboard)
+│   └── linux.py         # Linux stubs → full pynput/xdotool impl in Phase 2
 ├── core/
 │   ├── engine.py        # DictationEngine (QThread) — STT + LLM pipeline
 │   └── hotkey.py        # HotkeyListener (QThread) — 50 ms keyboard poll
@@ -83,12 +87,29 @@ src/AcouZ/
 
 ## Requirements
 
+### Windows (stable)
+
 | Requirement | Version |
 |-------------|---------|
 | Windows | 10 / 11 |
 | Python | 3.11+ |
 | Groq API key | Free tier (no credit card) |
 | Admin privileges | Required for global keyboard hooks |
+
+### Linux — Ubuntu (in progress, branch `feature/linux-port`)
+
+| Requirement | Notes |
+|-------------|-------|
+| Ubuntu | 22.04+ (X11 or XWayland) |
+| Python | 3.11+ |
+| `portaudio19-dev` | PortAudio headers for `sounddevice` |
+| `xdotool` + `xclip` | Foreground window detection + text capture (Phase 2) |
+| `pynput` | Hotkey listener replacement for `keyboard` (Phase 2) |
+| Groq API key | Same as Windows |
+
+> **Note:** The application currently boots and renders on Linux.  
+> Hotkeys, context capture, and autostart are stubs — full implementations  
+> are tracked in `src/acouz/platform/linux.py` and will land in Phase 2–3.
 
 ---
 
@@ -240,6 +261,15 @@ The installer:
 
 ## Roadmap
 
+### Cross-platform
+- [x] Platform abstraction layer (`acouz.platform`) — Phase 0 complete
+- [ ] Linux Phase 2 — `pynput` hotkeys, `xdotool` foreground detection, `xclip` text capture
+- [ ] Linux Phase 3 — `~/.config/autostart` for launch-at-login
+- [ ] Linux Phase 4 — Wayland strategy via `QT_QPA_PLATFORM=xcb` / XWayland
+- [ ] Linux Phase 5 — Integration tests on Ubuntu
+- [ ] Linux Phase 6 — `.AppImage` packaging
+
+### Features
 - [ ] Configurable Whisper language per dictation session
 - [ ] Self-hosted STT via Whisper.cpp (offline mode)
 - [ ] Multi-monitor overlay positioning

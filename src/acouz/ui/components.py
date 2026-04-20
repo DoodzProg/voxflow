@@ -30,6 +30,7 @@ from PySide6.QtSvgWidgets import QSvgWidget
 import acouz.ui.styles as S
 from acouz.ui.styles import ICONS, Theme
 from acouz.utils.config import ConfigManager
+from acouz.platform import start_window_drag, read_hotkey
 
 
 # ─────────────────────────────────────────────────────────────
@@ -624,8 +625,7 @@ class HotkeyRecorder(QThread):
 
     def run(self) -> None:
         """Block until a hotkey combination is pressed, then emit it."""
-        import keyboard  # noqa: PLC0415  (local import to avoid circular dep)
-        combo = keyboard.read_hotkey(suppress=False)
+        combo = read_hotkey()
         self.recorded.emit(combo)
 
 
@@ -943,16 +943,9 @@ class TitleBar(QWidget):
     # ------------------------------------------------------------------
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
-        """Trigger native Win32 window drag on left-button press in drag area."""
+        """Trigger native window drag on left-button press in drag area."""
         if event.button() == Qt.LeftButton:
-            try:
-                import ctypes  # noqa: PLC0415
-                ctypes.windll.user32.ReleaseCapture()
-                ctypes.windll.user32.SendMessageW(
-                    int(self._win.winId()), 0xA1, 2, 0  # WM_NCLBUTTONDOWN, HTCAPTION
-                )
-            except Exception:
-                pass
+            start_window_drag(int(self._win.winId()))
 
     # ------------------------------------------------------------------
 
