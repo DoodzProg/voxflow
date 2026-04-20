@@ -490,34 +490,34 @@ def is_key_pressed(key: str) -> bool:
 def send_paste(target_wid: int = 0) -> None:
     """Inject ``Ctrl+V`` into the target window via ``xdotool``.
 
-    Using ``--window <wid>`` ensures the paste reaches the correct application
-    even when AcouZ's overlay has stolen focus (e.g. after clicking ✓).
-    Falls back to a focus-independent keypress if no ``target_wid`` is given.
+    Strategy: ``xdotool windowactivate --sync <wid>`` raises and focuses the
+    target window, a 200 ms sleep lets the WM complete the switch, then a
+    global ``xdotool key ctrl+v`` fires into whichever window now has focus.
+    Passing ``--window`` directly to ``key`` is intentionally avoided because
+    it fails silently on GNOME / XWayland when the window does not yet hold
+    input focus at send time.
 
     Args:
-        target_wid: X11 window XID of the target application.  ``0`` means
-                    "send to the currently focused window".
+        target_wid: X11 window XID of the target application.  ``0`` skips
+                    the windowactivate step and sends the keypress globally.
     """
     try:
         if target_wid:
-            # Focus the target window, then send paste.
+            # Activate (raise + focus) the target window, wait for the WM to
+            # complete the switch, then send a global Ctrl+V.  Using
+            # ``--window`` with ``key`` is unreliable under GNOME/XWayland
+            # because the window may not have input focus at key-send time;
+            # windowactivate + global keypress is more robust.
             subprocess.run(
-                ["xdotool", "windowfocus", "--sync", str(target_wid)],
+                ["xdotool", "windowactivate", "--sync", str(target_wid)],
                 check=False,
                 timeout=2.0,
             )
-            time.sleep(0.05)
-            subprocess.run(
-                ["xdotool", "key", "--window", str(target_wid),
-                 "--clearmodifiers", "ctrl+v"],
-                check=False,
-                timeout=2.0,
-            )
-        else:
-            subprocess.run(
-                ["xdotool", "key", "--clearmodifiers", "ctrl+v"],
-                check=False,
-                timeout=2.0,
-            )
+            time.sleep(0.2)
+        subprocess.run(
+            ["xdotool", "key", "--clearmodifiers", "ctrl+v"],
+            check=False,
+            timeout=2.0,
+        )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         pass

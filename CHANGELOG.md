@@ -75,6 +75,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   cursor near the window border, and delegates to `QWindow.startSystemResize(Qt.Edges)` for
   native X11 / XCB resize handling.  Replaces the Windows-only `WM_NCHITTEST`
   `nativeEvent` path.
+- **Resize hitbox too narrow** (`src/acouz/ui/app.py`): `_BORDER` increased from `6` to
+  `12` px — the resize-cursor activation zone is now comfortably wide enough to grab with
+  a standard mouse pointer.
+- **Paste fails under GNOME / XWayland** (`src/acouz/platform/linux.py`): `send_paste`
+  now uses `xdotool windowactivate --sync <wid>` followed by a 200 ms settle delay and a
+  global `xdotool key --clearmodifiers ctrl+v` (no `--window` flag).  The previous
+  `--window` direct-key approach failed silently when the target window did not yet hold
+  input focus at send time.
 
 ### Changed
 - Windows behaviour is **identical** to v1.0.2 — no functional regression.

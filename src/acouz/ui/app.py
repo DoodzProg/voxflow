@@ -308,7 +308,7 @@ class AcouZApp(QMainWindow):
     """
 
     # Resize border thickness (pixels) used in nativeEvent hit-testing
-    _BORDER: int = 6
+    _BORDER: int = 12
     # Corner-radius of the rounded window background
     _RADIUS: int = 12
 
