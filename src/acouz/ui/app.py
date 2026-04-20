@@ -37,7 +37,7 @@ from PySide6.QtSvgWidgets import QSvgWidget
 from acouz.utils.config import ConfigManager
 from acouz.core.engine import DictationEngine
 from acouz.core.hotkey import HotkeyListener
-from acouz.platform import apply_dwm_rounded_corners, capture_selected_text
+from acouz.platform import apply_dwm_rounded_corners, capture_selected_text, send_paste
 
 import acouz.ui.styles as S
 from acouz.ui.styles import ICONS, Theme, DARK, LOGO_SVG
@@ -344,7 +344,37 @@ class AcouZApp(QMainWindow):
     # ------------------------------------------------------------------
 
     def _apply_dwm_rounded_corners(self) -> None:
-        apply_dwm_rounded_corners(int(self.winId()))
+        if sys.platform == "win32":
+            apply_dwm_rounded_corners(int(self.winId()))
+        else:
+            self._apply_linux_mask()
+
+    def _apply_linux_mask(self) -> None:
+        """Clip the window to a rounded rectangle via a QBitmap mask.
+
+        Called once after first paint and again on every resize event.
+        Works without a compositor (pure X11/XCB, no Wayland needed).
+        """
+        from PySide6.QtGui import QBitmap, QRegion  # noqa: PLC0415
+        from PySide6.QtCore import Qt               # noqa: PLC0415
+        bmp = QBitmap(self.size())
+        bmp.fill(Qt.color0)
+        p = QPainter(bmp)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(Qt.color1)
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(
+            self.rect().adjusted(0, 0, -1, -1),
+            self._RADIUS, self._RADIUS,
+        )
+        p.end()
+        self.setMask(QRegion(bmp))
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        """Re-apply rounded mask on Linux when the window is resized."""
+        if sys.platform != "win32":
+            self._apply_linux_mask()
+        super().resizeEvent(event)
 
     def _build_tray(self) -> None:
         """Create and show the system tray icon with its context menu."""
@@ -763,8 +793,7 @@ class AcouZApp(QMainWindow):
         clipboard.setText(text)
 
         def _paste_and_restore() -> None:
-            import keyboard  # noqa: PLC0415
-            keyboard.send("ctrl+v")
+            send_paste()
             QTimer.singleShot(250, lambda: clipboard.setMimeData(backup_mime))
 
         QTimer.singleShot(50, _paste_and_restore)

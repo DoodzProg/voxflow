@@ -5,8 +5,10 @@ Licensed under the MIT License
 
 Hotkey listener for the AcouZ application.
 
-Polls the ``keyboard`` library at 50 ms intervals for the configured key
-combinations and emits PySide6 signals so the UI thread can react safely.
+Polls for the configured key combinations at 50 ms intervals via the
+platform abstraction layer and emits PySide6 signals so the UI thread can
+react safely.  On Windows the ``keyboard`` library is used under the hood;
+on Linux the ``pynput`` global listener is used instead (no root required).
 
 Two independent hotkeys are monitored:
 
@@ -28,11 +30,10 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-import keyboard
 from PySide6.QtCore import QThread, Signal
 
 from acouz.utils.config import ConfigManager
-from acouz.platform import get_foreground_window
+from acouz.platform import get_foreground_window, is_key_pressed
 
 
 class HotkeyListener(QThread):
@@ -105,8 +106,8 @@ class HotkeyListener(QThread):
                 d_keys = self._parse_keys(dictate_str)
                 c_keys = self._parse_keys(context_str)
 
-                d_pressed = all(keyboard.is_pressed(k) for k in d_keys)
-                c_pressed = all(keyboard.is_pressed(k) for k in c_keys)
+                d_pressed = all(is_key_pressed(k) for k in d_keys)
+                c_pressed = all(is_key_pressed(k) for k in c_keys)
 
                 # Capture foreground HWND only when no hotkey is active
                 if not d_pressed and not c_pressed:

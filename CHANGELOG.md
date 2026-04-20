@@ -10,6 +10,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+#### Linux Implementations (Phase 2)
+- `src/acouz/platform/linux.py` — full Phase 2 implementation replacing all stubs:
+  - `is_key_pressed(key)` — module-level pynput `Listener` daemon thread tracks pressed keys;
+    no root privileges required; thread-safe via `threading.Lock`.
+  - `read_hotkey()` — pynput blocking combo capture (press + first release); 30 s timeout.
+  - `get_foreground_window()` — `xdotool getactivewindow` via `subprocess`, returns XID.
+  - `capture_selected_text()` — `xdotool key --clearmodifiers ctrl+c` + `xclip -selection
+    clipboard -o`; 150 ms settle delay before read.
+  - `send_paste()` — `xdotool key --clearmodifiers ctrl+v`.
+  - `start_window_drag()` — intentional no-op; drag handled by `TitleBar` Qt events (see below).
+  - `apply_dwm_rounded_corners()` — intentional no-op; mask applied by `AcouZApp` (see below).
+- `src/acouz/platform/windows.py` — added `is_key_pressed()` and `send_paste()` to maintain
+  API parity; backed by existing `keyboard` library calls.
+- `src/acouz/platform/__init__.py` — exports `is_key_pressed` and `send_paste` on both backends.
+- `src/acouz/core/hotkey.py` — removed direct `keyboard` dependency; polling loop now calls
+  `acouz.platform.is_key_pressed()` — eliminates root-privilege spam on Linux.
+- `src/acouz/ui/app.py`:
+  - `on_text_ready()` — replaced `keyboard.send("ctrl+v")` with `send_paste()`.
+  - `_apply_linux_mask()` — clips the frameless window to a rounded-rect `QBitmap` mask
+    (compositor-independent; works on pure X11/XCB).
+  - `resizeEvent()` — re-applies the rounded mask after every window resize on Linux.
+- `src/acouz/ui/components.py` — `TitleBar` drag for Linux:
+  - `mousePressEvent()` — stores cursor + window position on Linux instead of Win32 call.
+  - `mouseMoveEvent()` — moves the parent window during drag on Linux.
+  - `mouseReleaseEvent()` — clears drag state on Linux.
+
 #### Platform Abstraction Layer (Phase 0)
 - New `src/acouz/platform/` package providing a unified, OS-agnostic API
   for all system-level operations previously scattered across Windows-only call sites.

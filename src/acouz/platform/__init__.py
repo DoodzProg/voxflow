@@ -18,6 +18,8 @@ is_startup_enabled()              -- check autostart registration
 set_startup(enabled)              -- add / remove autostart entry
 start_window_drag(hwnd)           -- native frameless-window drag
 read_hotkey()                     -- blocking hotkey capture for rebinding UI
+is_key_pressed(key)               -- check if a key is currently held down
+send_paste()                      -- inject Ctrl+V into the focused window
 """
 
 import sys
@@ -32,6 +34,8 @@ if sys.platform == "win32":
         set_startup,
         start_window_drag,
         read_hotkey,
+        is_key_pressed,
+        send_paste,
     )
 else:
     from .linux import (  # noqa: F401
@@ -43,4 +47,6 @@ else:
         set_startup,
         start_window_drag,
         read_hotkey,
+        is_key_pressed,
+        send_paste,
     )

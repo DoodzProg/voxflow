@@ -254,3 +254,37 @@ def read_hotkey() -> str:
     """
     import keyboard  # noqa: PLC0415
     return keyboard.read_hotkey(suppress=False)
+
+
+# ---------------------------------------------------------------------------
+# Key-state query
+# ---------------------------------------------------------------------------
+
+def is_key_pressed(key: str) -> bool:
+    """Check whether *key* is currently held down using the keyboard library.
+
+    Args:
+        key: Normalised key name (already stripped of ``"right "`` / ``"left "``
+             prefix), e.g. ``"ctrl"``, ``"shift"``.
+
+    Returns:
+        ``True`` if the key is currently pressed, ``False`` on any error.
+    """
+    import keyboard  # noqa: PLC0415
+    try:
+        return bool(keyboard.is_pressed(key))
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Text injection
+# ---------------------------------------------------------------------------
+
+def send_paste() -> None:
+    """Send ``Ctrl+V`` via the keyboard library to paste clipboard contents."""
+    import keyboard  # noqa: PLC0415
+    try:
+        keyboard.send("ctrl+v")
+    except Exception:
+        pass

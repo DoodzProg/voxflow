@@ -859,6 +859,8 @@ class TitleBar(QWidget):
         super().__init__(parent)
         self._win = parent
         self._maximised = False
+        self._drag_start = None   # Linux drag: cursor position at press
+        self._win_start = None    # Linux drag: window position at press
         self.setFixedHeight(self.HEIGHT)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._build()
@@ -943,9 +945,32 @@ class TitleBar(QWidget):
     # ------------------------------------------------------------------
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
-        """Trigger native window drag on left-button press in drag area."""
+        """Trigger native window drag on left-button press in the drag area.
+
+        On Windows, delegates to the Win32 ``WM_NCLBUTTONDOWN/HTCAPTION``
+        message for correct Aero-Snap behaviour.  On Linux, stores the
+        initial cursor and window positions for Qt-driven drag tracking.
+        """
         if event.button() == Qt.LeftButton:
-            start_window_drag(int(self._win.winId()))
+            import sys  # noqa: PLC0415
+            if sys.platform == "win32":
+                start_window_drag(int(self._win.winId()))
+            else:
+                self._drag_start = event.globalPosition().toPoint()
+                self._win_start = self._win.pos()
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[override]
+        """Move the parent window to follow the cursor during a Linux drag."""
+        import sys  # noqa: PLC0415
+        if sys.platform != "win32" and hasattr(self, "_drag_start") and self._drag_start is not None:
+            delta = event.globalPosition().toPoint() - self._drag_start
+            self._win.move(self._win_start + delta)
+
+    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
+        """End a Linux drag on button release."""
+        import sys  # noqa: PLC0415
+        if sys.platform != "win32":
+            self._drag_start = None
 
     # ------------------------------------------------------------------
 
