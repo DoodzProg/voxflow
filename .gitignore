@@ -217,3 +217,8 @@ history.json
 # Fichiers de données locales
 !src/AcouZ/ui/icons/*.json
 docs/assets/*.gif
+
+# AI context & config locaux
+CLAUDE.md
+GEMINI.md
+.context/
